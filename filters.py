@@ -1,16 +1,33 @@
 import fnmatch, re, unicodedata
 
-
 def _normalize(s):
-    # lowercase, unicode normalize, strip accents/diacritics, replace ß with ss
-    # invent a more robust approach if needed for other languages
+    """
+    normalize a string for case-insensitive and diacritic-insensitive matching.
+    examples:
+      'järvelä' -> 'jarvela'
+      'gußmann' -> 'gussmann'
+      'françois' -> 'francois'
+    """
     s = s.lower()
     s = unicodedata.normalize("NFKD", s)
-    s = s.replace("ß", "ss")
-    # remove combining accents
+
+    # language-specific replacements
+    replacements = {
+        "ß": "ss",                      # german eszett
+        "ä": "a", "ö": "o", "ü": "u",   # german/finnish umlauts
+        "å": "a", "ø": "o", "æ": "ae",  # nordic letters
+        "ñ": "n",                       # spanish
+        "č": "c", "š": "s", "ž": "z",   # slavic accents
+    }
+
+    for old, new in replacements.items():
+        s = s.replace(old, new)
+
+    # strip any remaining combining marks (accents, tildes, etc.)
     s = "".join(c for c in s if not unicodedata.combining(c))
+
     # collapse whitespace
-    s = re.sub(r"\s+", " ", s)
+    s = re.sub(r"\s+", " ", s).strip()
     return s
 
 
