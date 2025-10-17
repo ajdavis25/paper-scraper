@@ -42,6 +42,8 @@ gmail let's you make free app passwords, go to:
         name another EMAIL_FROM
             youremail@gmail.com
 
+* note: special characters require logic to romanize the characters (see filters.py)
+
 now you can create a config.yaml and add authors, keywords, whatever you'd like!
 
 have fun, and bite me stanford!

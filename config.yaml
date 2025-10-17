@@ -8,7 +8,7 @@ arxiv:
     - "astro-ph.HE"
     - "astro-ph.IM"
     - "astro-ph.SR"
-  max_results: 50
+  max_results: 100
   days_back: 1
 
 preferences:
