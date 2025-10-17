@@ -1,5 +1,4 @@
 # config.yaml — your astro-ph bot settings
-
 arxiv:
   categories:
     - "astro-ph.CO"
@@ -19,17 +18,14 @@ preferences:
     - M87*
     - MHD
     - GRMHD
-    - magnetohydrodynamics
-    - EHT
+    - general relativistic magnetohydrodynamics
     - black hole
     - event horizon
     - accretion
     - jet
     - radiative transfer
     - VLBI
-    - general relativity
-    - neutron star
-    - pulsar
+    - black hole binary
   all_keywords:
     # e.g. require both terms together"
     - "radiative transfer"
