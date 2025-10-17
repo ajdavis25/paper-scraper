@@ -1,35 +1,37 @@
-# config.yaml
+# config.example.yaml
 arxiv:
-  categories: ["astro-ph*", "gr-qc"]   # glob OK -> astro-ph.CO, .GA, .HE, .IM, .SR, …
-  max_results: 200                     # cap per run
-  days_back: 1                         # search window
+  categories: ["astro-ph*", "gr-qc"]     # supports wildcards (astro-ph.CO, .GA, .HE, .IM, .SR, etc.)
+  max_results: 200                       # max results to fetch per run
+  days_back: 1                           # how many days of papers to include
 
 preferences:
   any_keywords:
-    - event horizon
-    - VLBI
-    - Sgr A*
-    - M87*
-    - jet launching
+    - "event horizon"
+    - "VLBI"
+    - "Sgr A*"
+    - "M87*"
+    - "jet launching"
   all_keywords:
-    - radiative transfer
+    - "radiative transfer"
+    - "general relativistic magnetohydrodynamics"
   authors:
     - "Akiyama"
     - "Anantua"
     - "Gammie"
   exclude_keywords:
-    - "education"       # quick negative filter
+    - "education"
     - "calendar"
-  min_score: 2.0
+  min_score: 2.0                         # raise threshold for stricter matches
 
 output:
-  include_conclusion: true   # try to extract conclusion from PDF
+  include_conclusion: false              # skip PDF parsing for now (faster)
   email:
-    from_addr: "you@gmail.com"
-    to_addrs: ["you@gmail.com"]
-    subject_prefix: "[astro-ph bot]"
+    from_addr: "${EMAIL_FROM}"           # use environment variables for portability
+    to_addrs:
+      - "you@gmail.com"
+    subject_prefix: "[astro-ph digest]"  # small rename for clarity
     smtp_host: "smtp.gmail.com"
     smtp_port: 587
     use_starttls: true
-    username: "you@gmail.com"
-    password_env: "ASTROPH_EMAIL_PASSWORD"   # read from env var
+    username: "${EMAIL_FROM}"            # matches gmail account
+    password_env: "EMAIL_PASS"           # must exist in github Secrets or local .env
