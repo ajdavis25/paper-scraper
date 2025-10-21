@@ -50,6 +50,7 @@ output:
     to_addrs:
       - "ajd96@proton.me"
       - "ashton.davis3@my.utsa.edu"
+      - "ranantua@rice.edu"
     subject_prefix: "[astro-ph digest]"
     smtp_host: "smtp.gmail.com"
     smtp_port: 587
