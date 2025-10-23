@@ -4,6 +4,10 @@
 built out of spite because stanford gatekept vox charta
 
 
+### WHAT THIS DOES
+this bot contains a defaults.yaml mailing list for new user profiles, and curation logic to slowly build a list for each user based on which papers you click/like
+
+
 astroph-bot/
  ├─ bot.py
  ├─ filters.py
