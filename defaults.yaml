@@ -1,0 +1,14 @@
+# defaults.yaml
+any_keywords:
+  - black hole
+  - accretion
+  - jet
+  - polarization
+  - AGN
+  - GRMHD
+
+authors:
+  - Anantua
+  - Curd
+  - Gußmann
+  - Quataert

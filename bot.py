@@ -1,6 +1,7 @@
 import re, os, yaml, feedparser, requests, datetime as dt
 from filters import score_paper, match_category
 from mailer import send_email
+from curator import merge_preferences
 
 print(f"[astro-ph bot] running: {__file__} SHA={os.environ.get('GITHUB_SHA', 'local')}")
 
@@ -172,6 +173,9 @@ def make_email_body(cfg, curated):
 
 def main():
     cfg = load_config()
+    cfg["preferences"] = merge_preferences(cfg["preferences"])
+    print("[astro-ph bot] merged keywords:", cfg["preferences"])
+    
     papers = fetch_recent(cfg)
     curated = curate(cfg, papers)
 
