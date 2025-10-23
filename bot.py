@@ -8,6 +8,7 @@ print(f"[astro-ph bot] running: {__file__} SHA={os.environ.get('GITHUB_SHA', 'lo
 # arXiv id pattern and canonical link helper
 _ARXIV_ID_RE = re.compile(r'(?:arxiv\.org/(?:abs|pdf)/)?(\d{4}\.\d{4,5})(v\d+)?', re.I)
 
+
 def canon_abs_url(paper):
     """return canonical https://arxiv.org/abs/<id> for dict or arxiv.Result."""
     if isinstance(paper, dict):
@@ -35,7 +36,6 @@ def canon_abs_url(paper):
 def load_config(path="config.yaml"):
     with open(path, "r", encoding="utf-8") as f:
         raw = f.read()
-    # substitute ${VAR} with its env value if present
     expanded = re.sub(r"\$\{([^}]+)\}", lambda m: os.getenv(m.group(1), ""), raw)
     return yaml.safe_load(expanded)
 
@@ -77,7 +77,6 @@ def fetch_recent(cfg):
         except Exception:
             pub = dt.datetime.now(dt.timezone.utc)
 
-        # extract arXiv id cleanly
         entry_id = getattr(entry, "id", "")
         m = _ARXIV_ID_RE.search(entry_id) or _ARXIV_ID_RE.search(entry.link)
         arxiv_id = (m.group(1) + (m.group(2) or "")) if m else ""
@@ -122,12 +121,44 @@ def curate(cfg, results):
                 "url": url,
                 "pdf_url": pdf_url,
                 "category": category,
+                "published": r.get("published"),
                 "score": score,
                 "details": details,
             })
 
     print(f"[astro-ph bot] curated {len(curated)} papers (score ≥ {prefs.get('min_score', 1.0)})")
     return curated
+
+
+def select_top(curated, min_keep=3, max_keep=5, base_min_score=1.0):
+    """Adaptive selector that keeps 3–5 papers per day."""
+    def keyfn(x):
+        d = x.get("details", {})
+        auth = d.get("auth_hits", 0)
+        anyh = d.get("any_hits", 0)
+        pub = x.get("published")
+        return (x.get("score", 0), auth, anyh, pub or 0)
+
+    items = sorted(curated, key=keyfn, reverse=True)
+    thr = base_min_score
+    filtered = [p for p in items if p.get("score", 0) >= thr]
+
+    step = 0.5
+    while len(filtered) > max_keep:
+        thr += step
+        new_filtered = [p for p in items if p.get("score", 0) >= thr]
+        if len(new_filtered) == len(filtered):
+            break
+        filtered = new_filtered
+
+    while len(filtered) < min_keep and thr > 0:
+        thr = max(0, thr - step)
+        new_filtered = [p for p in items if p.get("score", 0) >= thr]
+        if len(new_filtered) == len(filtered):
+            break
+        filtered = new_filtered
+
+    return filtered[:max_keep], thr
 
 
 def format_authors(authors, max_authors=5):
@@ -152,14 +183,12 @@ def make_email_body(cfg, curated):
         authors = r.get("authors", [])
         authors_line = ", ".join(authors) if isinstance(authors, list) else str(authors)
 
-        # TEXT block
         lines_txt.append(f"{title}\n{url}\n")
         if authors_line:
             lines_txt.append(f"Authors: {authors_line}\n")
         lines_txt.append(abstract + "\n")
         lines_txt.append("-" * 60)
 
-        # HTML block
         lines_html.append("<li>")
         lines_html.append(f'<p><b><a href="{url}">{title}</a></b></p>')
         if authors_line:
@@ -175,7 +204,7 @@ def main():
     cfg = load_config()
     cfg["preferences"] = merge_preferences(cfg["preferences"])
     print("[astro-ph bot] merged keywords:", cfg["preferences"])
-    
+
     papers = fetch_recent(cfg)
     curated = curate(cfg, papers)
 
@@ -185,8 +214,16 @@ def main():
         send_email(cfg, subject, "no matching papers found today.", "<p>no matches today.</p>")
         return
 
-    text_body, html_body = make_email_body(cfg, curated)
-    n = len(curated)
+    limits = cfg.get("limits", {})
+    min_keep = limits.get("min_per_day", 3)
+    max_keep = limits.get("max_per_day", 5)
+    base_thr = cfg["preferences"].get("min_score", 1.0)
+
+    selected, eff_thr = select_top(curated, min_keep=min_keep, max_keep=max_keep, base_min_score=base_thr)
+    print(f"[astro-ph bot] selected {len(selected)} (effective threshold={eff_thr}) out of {len(curated)} curated")
+
+    text_body, html_body = make_email_body(cfg, selected)
+    n = len(selected)
     subject = f'{cfg["output"]["email"]["subject_prefix"]} {dt.date.today()} — {n} paper{"s" if n != 1 else ""}'
     send_email(cfg, subject, text_body, html_body)
     print(f"emailed {n} curated papers.")

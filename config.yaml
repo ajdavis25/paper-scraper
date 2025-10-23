@@ -44,6 +44,10 @@ preferences:
     - "Gebhardt"
   min_score: 1.0
 
+  limits:
+    min_per_day: 3
+    max_per_day: 5
+
 output:
   include_conclusion: false
   email:
@@ -51,8 +55,6 @@ output:
     to_addrs:
       - "ajd96@proton.me"
       - "ashton.davis3@my.utsa.edu"
-      - "ranantua@rice.edu"
-      - "mat1492@uah.edu"
     subject_prefix: "[astro-ph digest]"
     smtp_host: "smtp.gmail.com"
     smtp_port: 587
