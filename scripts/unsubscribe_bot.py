@@ -3,7 +3,7 @@ from googleapiclient.discovery import build
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
-import os.path, re, yaml, base64
+import os.path, re, yaml, base64, json
 from email.mime.text import MIMEText
 
 # gmail scopes for read + send
@@ -17,16 +17,28 @@ def get_gmail_service():
     """authenticate and return a gmail API service object."""
     creds = None
     base_dir = os.path.dirname(os.path.abspath(__file__))
-    token_path = os.path.join(base_dir, "../secrets/token.json")
-    cred_path = os.path.join(base_dir, "../secrets/credentials.json")
+    secrets_dir = os.path.join(base_dir, "../secrets")
+    token_path = os.path.join(secrets_dir, "token.json")
+    cred_path = os.path.join(secrets_dir, "credentials.json")
 
+    # if running in github actions, load credentials from secret
+    if os.getenv("GMAIL_CREDENTIALS_JSON"):
+        print("[gmail] using credentials from GITHUB SECRET")
+        cred_data = json.loads(os.getenv("GMAIL_CREDENTIALS_JSON"))
+        os.makedirs(secrets_dir, exist_ok=True)
+        with open(cred_path, "w", encoding="utf-8") as f:
+            json.dump(cred_data, f)
+
+    # token.json may exist locally (or get created on first auth)
     if os.path.exists(token_path):
         creds = Credentials.from_authorized_user_file(token_path, SCOPES)
 
+    # if not valid or expired, reauthenticate
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
+            print("[gmail] starting OAuth flow...")
             flow = InstalledAppFlow.from_client_secrets_file(cred_path, SCOPES)
             creds = flow.run_local_server(port=0)
         with open(token_path, "w") as token:
