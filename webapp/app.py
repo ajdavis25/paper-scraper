@@ -56,7 +56,7 @@ def like():
 
 @app.route("/feedback")
 def feedback():
-    """display all recorded likes/dislikes as an HTML table"""
+    """display all recorded likes/dislikes as an HTML table."""
     rows = Feedback.query.order_by(Feedback.timestamp.desc()).limit(200).all()
 
     if not rows:

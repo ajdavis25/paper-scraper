@@ -216,6 +216,13 @@ def make_email_body(cfg, curated):
 
 def main():
     cfg = load_config()
+
+    # enable a testing mode to only send to myself
+    if cfg.get("testing", False):
+        test_addr = cfg.get("test_recipient", "ashton.davis3@my.utsa.edu")
+        print(f"[astro-ph bot] TEST MODE ENABLED — will only send to {test_addr}")
+        cfg["output"]["email"]["to_addrs"] = [test_addr]
+
     cfg["preferences"] = merge_preferences(cfg["preferences"])
     print("[astro-ph bot] merged keywords:", cfg["preferences"])
 
@@ -236,11 +243,8 @@ def main():
     selected, eff_thr = select_top(curated, min_keep=min_keep, max_keep=max_keep, base_min_score=base_thr)
     print(f"[astro-ph bot] selected {len(selected)} (effective threshold={eff_thr}) out of {len(curated)} curated")
 
-    # reroute safely if testing
-    if cfg.get("testing", False):
-        test_addr = cfg.get("test_recipient", "ashton.davis3@my.utsa.edu")
-        cfg["output"]["email"]["to_addrs"] = [test_addr]
-        print(f"[TEST MODE] sending only to {test_addr}")
+    # confirm recipients before sending
+    print("[astro-ph bot] sending digest to:", cfg["output"]["email"]["to_addrs"])
 
     text_body, html_body = make_email_body(cfg, selected)
     n = len(selected)
