@@ -39,14 +39,16 @@ jobs:
             echo "requirements.txt not found"; exit 1
           fi
 
-      # STEP: write gmail credentials from github secret
-      - name: Write Gmail credentials file
+      # STEP: write gmail credentials + token from github secret
+      - name: Write Gmail credentials and token
         env:
           GMAIL_CREDENTIALS_JSON: ${{ secrets.GMAIL_CREDENTIALS_JSON }}
+          GMAIL_TOKEN_JSON: ${{ secrets.GMAIL_TOKEN_JSON }}
         run: |
           mkdir -p ./astroph-bot/secrets
           echo "$GMAIL_CREDENTIALS_JSON" > ./astroph-bot/secrets/credentials.json
-          echo "Wrote credentials.json ($(wc -c < ./astroph-bot/secrets/credentials.json) bytes)"
+          echo "$GMAIL_TOKEN_JSON" > ./astroph-bot/secrets/token.json
+          echo "Wrote credentials.json and token.json"
 
       # STEP: run subscription checker before sending digest
       - name: Run subscription check (subscribe_bot.py)
