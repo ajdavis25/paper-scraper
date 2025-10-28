@@ -1,14 +1,32 @@
 # defaults.yaml
 any_keywords:
   - black hole
+  - neutron star
   - accretion
   - jet
-  - polarization
   - AGN
+  - galaxy
+  - cosmology
+  - exoplanet
+  - star formation
+  - polarization
+  - magnetohydrodynamics
   - GRMHD
+  - VLBI
+  - radio astronomy
+  - spectroscopy
+  - gravitational waves
+  - high-energy astrophysics
+  - simulation
+  - radiative transfer
 
 authors:
   - Anantua
   - Curd
   - Gußmann
   - Quataert
+  - Blandford
+  - Tchekhovskoy
+  - Narayan
+  - Gammie
+  - Event Horizon Telescope
