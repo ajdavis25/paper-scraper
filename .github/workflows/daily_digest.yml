@@ -13,88 +13,63 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Debug paths (show what actually exists)
-        run: |
-          echo "PWD=$(pwd)"
-          echo "repo tree (top level):"
-          ls -la
-          echo "full tree (2 levels):"
-          find . -maxdepth 2 -type d -print
-          echo "looking for bot.py, config.yaml, and requirements.txt:"
-          find . -name "bot.py" -o -name "config.yaml" -o -name "requirements.txt" -maxdepth 3
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Install dependencies (wherever requirements.txt actually is)
+      - name: Install dependencies
         run: |
           set -e
-          if [ -f "./astroph-bot/requirements.txt" ]; then
-            pip install -r ./astroph-bot/requirements.txt
-          elif [ -f "./requirements.txt" ]; then
+          if [ -f "./requirements.txt" ]; then
             pip install -r ./requirements.txt
           else
             echo "requirements.txt not found"; exit 1
           fi
 
-      # STEP: write gmail credentials + token from github secrets
       - name: Write Gmail credentials and token
         env:
           GMAIL_CREDENTIALS_JSON: ${{ secrets.GMAIL_CREDENTIALS_JSON }}
           GMAIL_TOKEN_JSON: ${{ secrets.GMAIL_TOKEN_JSON }}
         run: |
           set -e
-          mkdir -p ./astroph-bot/secrets
-          echo "$GMAIL_CREDENTIALS_JSON" > ./astroph-bot/secrets/credentials.json
-          echo "$GMAIL_TOKEN_JSON" > ./astroph-bot/secrets/token.json
+          mkdir -p ./secrets
+          echo "$GMAIL_CREDENTIALS_JSON" > ./secrets/credentials.json
+          echo "$GMAIL_TOKEN_JSON" > ./secrets/token.json
           echo "wrote credentials.json and token.json"
 
-      # STEP: run subscription checker before sending digest
+      - name: Write config.yaml from secret
+        env:
+          CONFIG_YAML: ${{ secrets.CONFIG_YAML }}
+        run: |
+          echo "$CONFIG_YAML" > ./config.yaml
+          echo "wrote config.yaml from github secret"
+
       - name: Run subscription check (subscribe_bot.py)
         env:
           EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
           EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
-          GMAIL_CREDENTIALS_JSON: ${{ secrets.GMAIL_CREDENTIALS_JSON }}
-          GMAIL_TOKEN_JSON: ${{ secrets.GMAIL_TOKEN_JSON }}
         run: |
           set -e
           echo "checking for new subscription emails..."
-          if [ -f "./astroph-bot/scripts/subscribe_bot.py" ]; then
-            python ./astroph-bot/scripts/subscribe_bot.py
-          elif [ -f "./scripts/subscribe_bot.py" ]; then
+          if [ -f "./scripts/subscribe_bot.py" ]; then
             python ./scripts/subscribe_bot.py
           else
             echo "subscribe_bot.py not found — skipping"
           fi
 
-      # STEP: run unsubscription checker before sending digest
       - name: Run unsubscription check (unsubscribe_bot.py)
         env:
           EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
           EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
-          GMAIL_CREDENTIALS_JSON: ${{ secrets.GMAIL_CREDENTIALS_JSON }}
-          GMAIL_TOKEN_JSON: ${{ secrets.GMAIL_TOKEN_JSON }}
         run: |
           set -e
           echo "checking for unsubscribe requests..."
-          if [ -f "./astroph-bot/scripts/unsubscribe_bot.py" ]; then
-            python ./astroph-bot/scripts/unsubscribe_bot.py
-          elif [ -f "./scripts/unsubscribe_bot.py" ]; then
+          if [ -f "./scripts/unsubscribe_bot.py" ]; then
             python ./scripts/unsubscribe_bot.py
           else
             echo "unsubscribe_bot.py not found — skipping"
           fi
-
-      # MAIN: run the daily digest after subscription updates
-      - name: Write config.yaml from secret
-        env:
-          CONFIG_YAML: ${{ secrets.CONFIG_YAML }}
-        run: |
-          mkdir -p ./astroph-bot
-          echo "$CONFIG_YAML" > ./astroph-bot/config.yaml
-          echo "wrote config.yaml from GitHub secret"
 
       - name: Run astro-ph digest bot
         env:
@@ -106,4 +81,8 @@ jobs:
         run: |
           set -e
           echo "running astro-ph digest bot..."
-          python ./astroph-bot/bot.py ./astroph-bot/config.yaml
+          if [ -f "./bot.py" ]; then
+            python ./bot.py ./config.yaml
+          else
+            echo "bot.py not found in repo"; exit 1
+          fi
