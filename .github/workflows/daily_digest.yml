@@ -88,6 +88,14 @@ jobs:
           fi
 
       # MAIN: run the daily digest after subscription updates
+      - name: Write config.yaml from secret
+        env:
+          CONFIG_YAML: ${{ secrets.CONFIG_YAML }}
+        run: |
+          mkdir -p ./astroph-bot
+          echo "$CONFIG_YAML" > ./astroph-bot/config.yaml
+          echo "wrote config.yaml from GitHub secret"
+
       - name: Run astro-ph digest bot
         env:
           EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
@@ -98,13 +106,4 @@ jobs:
         run: |
           set -e
           echo "running astro-ph digest bot..."
-          CONFIG_PATH="./astroph-bot/config.yaml"
-          if [ -f "$CONFIG_PATH" ]; then
-            echo "found config at $CONFIG_PATH"
-            python ./astroph-bot/bot.py "$CONFIG_PATH"
-          elif [ -f "./config.yaml" ]; then
-            echo "found config at ./config.yaml"
-            python ./bot.py ./config.yaml
-          else
-            echo "config.yaml not found!"; exit 1
-          fi
+          python ./astroph-bot/bot.py ./astroph-bot/config.yaml
