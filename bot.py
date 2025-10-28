@@ -175,43 +175,39 @@ def format_authors(authors, max_authors=5):
 def make_email_body(cfg, curated):
     lines_txt = []
     lines_html = ['<html><body><h2>astro-ph digest</h2><ol>']
-    email_base = os.getenv("VERCEL_URL", "http://astro-digest.vercel.app")
+
+    # your live backend base URL:
+    email_base = "https://astro-digest.vercel.app"
 
     for r in curated:
         url = r.get("url") or canon_abs_url(r) or ""
         title = r.get("title", "")
         abstract = r.get("summary", "")
         authors = r.get("authors", [])
-        arxiv_id = r.get("arxiv_id", "")
+        arxiv_id = r.get("arxiv_id", "") or url.split("/")[-1]
         authors_line = ", ".join(authors) if isinstance(authors, list) else str(authors)
 
-        # TEXT section
+        # like/dislike feedback links
+        like_link = f"{email_base}/like?email=ashton.davis3@my.utsa.edu&arxiv_id={arxiv_id}&liked=true"
+        dislike_link = f"{email_base}/like?email=ashton.davis3@my.utsa.edu&arxiv_id={arxiv_id}&liked=false"
+
+        # TEXT email section
         lines_txt.append(f"{title}\n{url}\n")
         if authors_line:
-            lines_txt.append(f"Authors: {authors_line}\n")
+            lines_txt.append(f"authors: {authors_line}\n")
         lines_txt.append(abstract + "\n")
+        lines_txt.append(f"👍 like: {like_link}\n👎 dislike: {dislike_link}\n")
         lines_txt.append("-" * 60)
 
-        # HTML section
+        # HTML email section
         lines_html.append("<li>")
         lines_html.append(f'<p><b><a href="{url}">{title}</a></b></p>')
         if authors_line:
             lines_html.append(f"<p><i>{authors_line}</i></p>")
         lines_html.append(f"<p>{abstract}</p>")
-
-        # like/dislike feedback links
-        like_link = (
-            f"{email_base}/like?"
-            f"email=ashton.davis3@my.utsa.edu&arxiv_id={arxiv_id}&liked=true"
-        )
-        dislike_link = (
-            f"{email_base}/like?"
-            f"email=ashton.davis3@my.utsa.edu&arxiv_id={arxiv_id}&liked=false"
-        )
         lines_html.append(
             f"<p><a href='{like_link}'>👍 like</a> | <a href='{dislike_link}'>👎 dislike</a></p>"
         )
-
         lines_html.append("</li>")
 
     lines_html.append("</ol></body></html>")

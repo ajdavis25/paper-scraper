@@ -1,11 +1,24 @@
 # local secrets
 config.yaml
 .env
+.envrc
 
 # virtual environments
 venv/
-.envrc
+webapp/venv/
 
 # cache and compiled files
 __pycache__/
 *.pyc
+
+# database files
+*.db
+*.sqlite3
+
+# OS / editor junk
+.DS_Store
+Thumbs.db
+
+# logs and temp files
+*.log
+/tmp/
