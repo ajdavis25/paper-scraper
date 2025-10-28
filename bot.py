@@ -33,7 +33,14 @@ def canon_abs_url(paper):
     return ""
 
 
-def load_config(path="config.yaml"):
+def load_config(path=None):
+    if not path:
+        # try first arg from command line
+        import sys
+        if len(sys.argv) > 1:
+            path = sys.argv[1]
+        else:
+            path = "config.yaml"
     with open(path, "r", encoding="utf-8") as f:
         raw = f.read()
     expanded = re.sub(r"\$\{([^}]+)\}", lambda m: os.getenv(m.group(1), ""), raw)

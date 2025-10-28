@@ -94,12 +94,13 @@ jobs:
         run: |
           set -e
           echo "PWD=$(pwd)"
-          if [ -f "./astroph-bot/bot.py" ]; then
-            echo "running ./astroph-bot/bot.py"
-            python ./astroph-bot/bot.py
-          elif [ -f "./bot.py" ]; then
-            echo "running ./bot.py"
-            python ./bot.py
+          CONFIG_PATH="./astroph-bot/config.yaml"
+          if [ -f "$CONFIG_PATH" ]; then
+            echo "Found config at $CONFIG_PATH"
+            python ./astroph-bot/bot.py "$CONFIG_PATH"
+          elif [ -f "./config.yaml" ]; then
+            echo "Found config at ./config.yaml"
+            python ./bot.py ./config.yaml
           else
-            echo "bot.py not found in repo"; exit 1
+            echo "config.yaml not found!"; exit 1
           fi
