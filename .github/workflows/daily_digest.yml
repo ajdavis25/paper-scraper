@@ -20,8 +20,8 @@ jobs:
           ls -la
           echo "full tree (2 levels):"
           find . -maxdepth 2 -type d -print
-          echo "looking for bot.py & requirements.txt:"
-          find . -name "bot.py" -o -name "requirements.txt" -maxdepth 3
+          echo "looking for bot.py, config.yaml, and requirements.txt:"
+          find . -name "bot.py" -o -name "config.yaml" -o -name "requirements.txt" -maxdepth 3
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -39,16 +39,17 @@ jobs:
             echo "requirements.txt not found"; exit 1
           fi
 
-      # STEP: write gmail credentials + token from github secret
+      # STEP: write gmail credentials + token from github secrets
       - name: Write Gmail credentials and token
         env:
           GMAIL_CREDENTIALS_JSON: ${{ secrets.GMAIL_CREDENTIALS_JSON }}
           GMAIL_TOKEN_JSON: ${{ secrets.GMAIL_TOKEN_JSON }}
         run: |
+          set -e
           mkdir -p ./astroph-bot/secrets
           echo "$GMAIL_CREDENTIALS_JSON" > ./astroph-bot/secrets/credentials.json
           echo "$GMAIL_TOKEN_JSON" > ./astroph-bot/secrets/token.json
-          echo "Wrote credentials.json and token.json"
+          echo "wrote credentials.json and token.json"
 
       # STEP: run subscription checker before sending digest
       - name: Run subscription check (subscribe_bot.py)
@@ -56,6 +57,7 @@ jobs:
           EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
           EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
           GMAIL_CREDENTIALS_JSON: ${{ secrets.GMAIL_CREDENTIALS_JSON }}
+          GMAIL_TOKEN_JSON: ${{ secrets.GMAIL_TOKEN_JSON }}
         run: |
           set -e
           echo "checking for new subscription emails..."
@@ -73,6 +75,7 @@ jobs:
           EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
           EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
           GMAIL_CREDENTIALS_JSON: ${{ secrets.GMAIL_CREDENTIALS_JSON }}
+          GMAIL_TOKEN_JSON: ${{ secrets.GMAIL_TOKEN_JSON }}
         run: |
           set -e
           echo "checking for unsubscribe requests..."
@@ -91,15 +94,16 @@ jobs:
           EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
           TEST_MODE: ${{ secrets.TEST_MODE }}
           GMAIL_CREDENTIALS_JSON: ${{ secrets.GMAIL_CREDENTIALS_JSON }}
+          GMAIL_TOKEN_JSON: ${{ secrets.GMAIL_TOKEN_JSON }}
         run: |
           set -e
-          echo "PWD=$(pwd)"
+          echo "running astro-ph digest bot..."
           CONFIG_PATH="./astroph-bot/config.yaml"
           if [ -f "$CONFIG_PATH" ]; then
-            echo "Found config at $CONFIG_PATH"
+            echo "found config at $CONFIG_PATH"
             python ./astroph-bot/bot.py "$CONFIG_PATH"
           elif [ -f "./config.yaml" ]; then
-            echo "Found config at ./config.yaml"
+            echo "found config at ./config.yaml"
             python ./bot.py ./config.yaml
           else
             echo "config.yaml not found!"; exit 1

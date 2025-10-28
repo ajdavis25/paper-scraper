@@ -34,17 +34,37 @@ def canon_abs_url(paper):
 
 
 def load_config(path=None):
-    if not path:
-        # try first arg from command line
-        import sys
-        if len(sys.argv) > 1:
-            path = sys.argv[1]
-        else:
-            path = "config.yaml"
-    with open(path, "r", encoding="utf-8") as f:
-        raw = f.read()
-    expanded = re.sub(r"\$\{([^}]+)\}", lambda m: os.getenv(m.group(1), ""), raw)
-    return yaml.safe_load(expanded)
+    """
+    load YAML config, automatically detecting path from CLI or repo layout.
+    works both locally and in github actions.
+    """
+    import sys
+
+    # allow explicit CLI arg
+    if not path and len(sys.argv) > 1:
+        path = sys.argv[1]
+
+    # default fallbacks
+    candidates = []
+    if path:
+        candidates.append(path)
+    candidates += [
+        "config.yaml",
+        "./config.yaml",
+        os.path.join(os.path.dirname(__file__), "config.yaml"),
+        os.path.join(os.path.dirname(__file__), "astroph-bot", "config.yaml"),
+        os.path.join(os.getcwd(), "astroph-bot", "config.yaml"),
+    ]
+
+    for candidate in candidates:
+        if os.path.exists(candidate):
+            print(f"[astro-ph bot] using config: {candidate}")
+            with open(candidate, "r", encoding="utf-8") as f:
+                raw = f.read()
+            expanded = re.sub(r"\$\{([^}]+)\}", lambda m: os.getenv(m.group(1), ""), raw)
+            return yaml.safe_load(expanded)
+
+    raise FileNotFoundError(f"config.yaml not found in any of {candidates}")
 
 
 def build_search_query(cfg):
