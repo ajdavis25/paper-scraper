@@ -39,8 +39,8 @@ def send_unsub_confirm(service, to_email):
     """send a polite goodbye email."""
     message = MIMEText(
         "what? did you get accepted to stanford or something?\n\n"
-        "you’ve been removed from the astro-ph digest mailing list.\n\n"
         "whatever major loser, we didn't want you here anyways!\n\n"
+        "you’ve been removed from the astro-ph digest mailing list.\n\n"
         "if you’d like to rejoin later, just send an email with the subject 'subscribe'.\n\n"
         "clear skies,\nthe astro-ph digest bot"
     )
