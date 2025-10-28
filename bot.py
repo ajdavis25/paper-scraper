@@ -217,8 +217,9 @@ def make_email_body(cfg, curated):
 def main():
     cfg = load_config()
 
-    # enable a testing mode to only send to myself
-    if cfg.get("testing", False):
+    # read testing flag from github secrets (env var)
+    test_mode = os.getenv("TEST_MODE", "false").lower() == "true"
+    if test_mode:
         test_addr = cfg.get("test_recipient", "ashton.davis3@my.utsa.edu")
         print(f"[astro-ph bot] TEST MODE ENABLED — will only send to {test_addr}")
         cfg["output"]["email"]["to_addrs"] = [test_addr]
