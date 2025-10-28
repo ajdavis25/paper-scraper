@@ -39,11 +39,21 @@ jobs:
             echo "requirements.txt not found"; exit 1
           fi
 
+      # STEP: write gmail credentials from github secret
+      - name: Write Gmail credentials file
+        env:
+          GMAIL_CREDENTIALS_JSON: ${{ secrets.GMAIL_CREDENTIALS_JSON }}
+        run: |
+          mkdir -p ./astroph-bot/secrets
+          echo "$GMAIL_CREDENTIALS_JSON" > ./astroph-bot/secrets/credentials.json
+          echo "Wrote credentials.json ($(wc -c < ./astroph-bot/secrets/credentials.json) bytes)"
+
       # STEP: run subscription checker before sending digest
       - name: Run subscription check (subscribe_bot.py)
         env:
           EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
           EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
+          GMAIL_CREDENTIALS_JSON: ${{ secrets.GMAIL_CREDENTIALS_JSON }}
         run: |
           set -e
           echo "checking for new subscription emails..."
@@ -52,7 +62,7 @@ jobs:
           elif [ -f "./scripts/subscribe_bot.py" ]; then
             python ./scripts/subscribe_bot.py
           else
-            echo "subscribe_bot.py not found — skipping"; 
+            echo "subscribe_bot.py not found — skipping"
           fi
 
       # STEP: run unsubscription checker before sending digest
@@ -60,6 +70,7 @@ jobs:
         env:
           EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
           EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
+          GMAIL_CREDENTIALS_JSON: ${{ secrets.GMAIL_CREDENTIALS_JSON }}
         run: |
           set -e
           echo "checking for unsubscribe requests..."
