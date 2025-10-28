@@ -70,6 +70,10 @@ def send_welcome_email(service, to_email):
 def check_new_subscribers():
     """look for unread emails with 'subscribe' in subject, update config.yaml, and welcome them."""
     service = get_gmail_service()
+    if not service:
+        print("[gmail] no service available — skipping subscription check.")
+        return
+
     results = service.users().messages().list(userId="me", q="is:unread subject:subscribe").execute()
     msgs = results.get("messages", [])
 

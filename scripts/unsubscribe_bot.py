@@ -71,6 +71,10 @@ def send_unsub_confirm(service, to_email):
 def check_unsubscribers():
     """look for unread 'unsubscribe' emails and remove them from config.yaml."""
     service = get_gmail_service()
+    if not service:
+        print("[gmail] no service available — skipping subscription check.")
+        return
+    
     results = service.users().messages().list(userId="me", q="is:unread subject:unsubscribe").execute()
     msgs = results.get("messages", [])
 
