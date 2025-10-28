@@ -3,6 +3,7 @@ from pdfminer.high_level import extract_text
 
 HEADERS = [r"conclusion[s]?", r"summary", r"concluding remarks", r"discussion"]
 
+
 def try_extract_conclusion(pdf_url, char_limit=1200):
     try:
         with urllib.request.urlopen(pdf_url, timeout=20) as resp:

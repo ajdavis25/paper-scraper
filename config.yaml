@@ -1,5 +1,5 @@
 # config.yaml — astro-ph bot settings
-testing: false  # toggle this off when ready to go live
+testing: true  # toggle this off when ready to go live
 test_recipient: "ashton.davis3@my.utsa.edu"
 
 arxiv:

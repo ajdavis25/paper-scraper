@@ -1,5 +1,6 @@
 import fnmatch, re, unicodedata
 
+
 def _normalize(s):
     """
     normalize a string for case-insensitive and diacritic-insensitive matching.

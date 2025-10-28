@@ -3,6 +3,7 @@ from datetime import datetime
 
 db = SQLAlchemy()
 
+
 class User(db.Model):
     __tablename__ = "user"
     id = db.Column(db.Integer, primary_key=True)
@@ -10,6 +11,7 @@ class User(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     preferences = db.relationship("UserPreference", back_populates="user")
+
 
 class Paper(db.Model):
     __tablename__ = "paper"
@@ -21,6 +23,7 @@ class Paper(db.Model):
     added_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     preferences = db.relationship("UserPreference", back_populates="paper")
+
 
 class UserPreference(db.Model):
     __tablename__ = "user_preference"

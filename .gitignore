@@ -26,3 +26,8 @@ Thumbs.db
 # notebooks
 notebooks/
 *.ipynb
+
+# sensitive info
+secrets/
+token.json
+credentials.json

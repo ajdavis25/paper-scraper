@@ -2,12 +2,13 @@ name: Daily astro-ph Digest
 
 on:
   schedule:
-    - cron: "0 13 * * *" # 8am central
+    - cron: "0 13 * * *"  # 8am central
   workflow_dispatch:
 
 jobs:
   run-digest:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -15,11 +16,11 @@ jobs:
       - name: Debug paths (show what actually exists)
         run: |
           echo "PWD=$(pwd)"
-          echo "Repo tree (top level):"
+          echo "repo tree (top level):"
           ls -la
-          echo "Full tree (2 levels):"
+          echo "full tree (2 levels):"
           find . -maxdepth 2 -type d -print
-          echo "Looking for bot.py & requirements.txt:"
+          echo "looking for bot.py & requirements.txt:"
           find . -name "bot.py" -o -name "requirements.txt" -maxdepth 3
 
       - name: Set up Python
@@ -38,7 +39,40 @@ jobs:
             echo "requirements.txt not found"; exit 1
           fi
 
-      - name: Run astro-ph bot (try subdir, then root)
+      # STEP: run subscription checker before sending digest
+      - name: Run subscription check (subscribe_bot.py)
+        env:
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
+        run: |
+          set -e
+          echo "checking for new subscription emails..."
+          if [ -f "./astroph-bot/scripts/subscribe_bot.py" ]; then
+            python ./astroph-bot/scripts/subscribe_bot.py
+          elif [ -f "./scripts/subscribe_bot.py" ]; then
+            python ./scripts/subscribe_bot.py
+          else
+            echo "subscribe_bot.py not found — skipping"; 
+          fi
+
+      # STEP: run unsubscription checker before sending digest
+      - name: Run unsubscription check (unsubscribe_bot.py)
+        env:
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
+        run: |
+          set -e
+          echo "checking for unsubscribe requests..."
+          if [ -f "./astroph-bot/scripts/unsubscribe_bot.py" ]; then
+            python ./astroph-bot/scripts/unsubscribe_bot.py
+          elif [ -f "./scripts/unsubscribe_bot.py" ]; then
+            python ./scripts/unsubscribe_bot.py
+          else
+            echo "unsubscribe_bot.py not found — skipping"
+          fi
+
+      # MAIN: run the daily digest after subscription updates
+      - name: Run astro-ph digest bot
         env:
           EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
           EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
@@ -46,10 +80,10 @@ jobs:
           set -e
           echo "PWD=$(pwd)"
           if [ -f "./astroph-bot/bot.py" ]; then
-            echo "Running ./astroph-bot/bot.py"
+            echo "running ./astroph-bot/bot.py"
             python ./astroph-bot/bot.py
           elif [ -f "./bot.py" ]; then
-            echo "Running ./bot.py"
+            echo "running ./bot.py"
             python ./bot.py
           else
             echo "bot.py not found in repo"; exit 1

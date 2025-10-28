@@ -10,7 +10,7 @@ _ARXIV_ID_RE = re.compile(r'(?:arxiv\.org/(?:abs|pdf)/)?(\d{4}\.\d{4,5})(v\d+)?'
 
 
 def canon_abs_url(paper):
-    """return canonical https://arxiv.org/abs/<id> for dict or arxiv.Result"""
+    """return canonical https://arxiv.org/abs/<id> for dict or arxiv.Result."""
     if isinstance(paper, dict):
         candidates = [paper.get("url"), paper.get("link"), paper.get("id")]
     else:
@@ -131,7 +131,7 @@ def curate(cfg, results):
 
 
 def select_top(curated, min_keep=3, max_keep=5, base_min_score=1.0):
-    """adaptive selector that keeps 3–5 papers per day"""
+    """adaptive selector that keeps 3–5 papers per day."""
     def keyfn(x):
         d = x.get("details", {})
         auth = d.get("auth_hits", 0)
@@ -176,7 +176,7 @@ def make_email_body(cfg, curated):
     lines_txt = []
     lines_html = ['<html><body><h2>astro-ph digest</h2><ol>']
 
-    # your live backend base URL:
+    # your live backend base url:
     email_base = "https://astro-digest.vercel.app"
 
     for r in curated:

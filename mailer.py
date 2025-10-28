@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 # load local .env if present
 load_dotenv()
 
+
 def send_email(cfg, subject, text_body, html_body):
     """
     send an email using credentials from environment variables
