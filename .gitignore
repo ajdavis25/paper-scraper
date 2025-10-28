@@ -22,3 +22,7 @@ Thumbs.db
 # logs and temp files
 *.log
 /tmp/
+
+# notebooks
+notebooks/
+*.ipynb
