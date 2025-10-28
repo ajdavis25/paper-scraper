@@ -6,15 +6,15 @@ from google.auth.transport.requests import Request
 import os.path, re, yaml, base64
 from email.mime.text import MIMEText
 
-# full gmail access for read + send
+# gmail scopes for read + send
 SCOPES = [
-    "https://www.googleapis.com/auth/gmail.readonly",
+    "https://www.googleapis.com/auth/gmail.modify",
     "https://www.googleapis.com/auth/gmail.send"
 ]
 
 
 def get_gmail_service():
-    """authenticate and return a Gmail API service object."""
+    """authenticate and return a gmail API service object."""
     creds = None
     base_dir = os.path.dirname(os.path.abspath(__file__))
     token_path = os.path.join(base_dir, "../secrets/token.json")

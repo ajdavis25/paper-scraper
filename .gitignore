@@ -2,6 +2,9 @@
 config.yaml
 .env
 .envrc
+secrets/
+token.json
+credentials.json
 
 # virtual environments
 venv/
@@ -26,8 +29,3 @@ Thumbs.db
 # notebooks
 notebooks/
 *.ipynb
-
-# sensitive info
-secrets/
-token.json
-credentials.json

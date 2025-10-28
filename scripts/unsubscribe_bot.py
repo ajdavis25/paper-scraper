@@ -8,13 +8,13 @@ from email.mime.text import MIMEText
 
 # gmail scopes for read + send
 SCOPES = [
-    "https://www.googleapis.com/auth/gmail.readonly",
+    "https://www.googleapis.com/auth/gmail.modify",
     "https://www.googleapis.com/auth/gmail.send"
 ]
 
 
 def get_gmail_service():
-    """authenticate and return gmail service."""
+    """authenticate and return a gmail API service object."""
     creds = None
     base_dir = os.path.dirname(os.path.abspath(__file__))
     token_path = os.path.join(base_dir, "../secrets/token.json")
@@ -40,12 +40,12 @@ def send_unsub_confirm(service, to_email):
     message = MIMEText(
         "what? did you get accepted to stanford or something?\n\n"
         "you’ve been removed from the astro-ph digest mailing list.\n\n"
-        "we’re sorry to see you go! if you’d like to rejoin later, "
-        "just send an email with the subject 'subscribe'.\n\n"
+        "whatever major loser, we didn't want you here anyways!\n\n"
+        "if you’d like to rejoin later, just send an email with the subject 'subscribe'.\n\n"
         "clear skies,\nthe astro-ph digest bot"
     )
     message["to"] = to_email
-    message["subject"] = "astro-ph digest: Unsubscription Confirmed"
+    message["subject"] = "astro-ph digest: unsubscription confirmed"
 
     raw = base64.urlsafe_b64encode(message.as_bytes()).decode("utf-8")
     body = {"raw": raw}
