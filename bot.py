@@ -10,7 +10,7 @@ _ARXIV_ID_RE = re.compile(r'(?:arxiv\.org/(?:abs|pdf)/)?(\d{4}\.\d{4,5})(v\d+)?'
 
 
 def canon_abs_url(paper):
-    """return canonical https://arxiv.org/abs/<id> for dict or arxiv.Result."""
+    """return canonical https://arxiv.org/abs/<id> for dict or arxiv.Result"""
     if isinstance(paper, dict):
         candidates = [paper.get("url"), paper.get("link"), paper.get("id")]
     else:
@@ -131,7 +131,7 @@ def curate(cfg, results):
 
 
 def select_top(curated, min_keep=3, max_keep=5, base_min_score=1.0):
-    """Adaptive selector that keeps 3–5 papers per day."""
+    """adaptive selector that keeps 3–5 papers per day"""
     def keyfn(x):
         d = x.get("details", {})
         auth = d.get("auth_hits", 0)
@@ -175,25 +175,43 @@ def format_authors(authors, max_authors=5):
 def make_email_body(cfg, curated):
     lines_txt = []
     lines_html = ['<html><body><h2>astro-ph digest</h2><ol>']
+    email_base = os.getenv("VERCEL_URL", "http://astro-digest.vercel.app")
 
     for r in curated:
         url = r.get("url") or canon_abs_url(r) or ""
         title = r.get("title", "")
         abstract = r.get("summary", "")
         authors = r.get("authors", [])
+        arxiv_id = r.get("arxiv_id", "")
         authors_line = ", ".join(authors) if isinstance(authors, list) else str(authors)
 
+        # TEXT section
         lines_txt.append(f"{title}\n{url}\n")
         if authors_line:
             lines_txt.append(f"Authors: {authors_line}\n")
         lines_txt.append(abstract + "\n")
         lines_txt.append("-" * 60)
 
+        # HTML section
         lines_html.append("<li>")
         lines_html.append(f'<p><b><a href="{url}">{title}</a></b></p>')
         if authors_line:
             lines_html.append(f"<p><i>{authors_line}</i></p>")
         lines_html.append(f"<p>{abstract}</p>")
+
+        # like/dislike feedback links
+        like_link = (
+            f"{email_base}/like?"
+            f"email=ashton.davis3@my.utsa.edu&arxiv_id={arxiv_id}&liked=true"
+        )
+        dislike_link = (
+            f"{email_base}/like?"
+            f"email=ashton.davis3@my.utsa.edu&arxiv_id={arxiv_id}&liked=false"
+        )
+        lines_html.append(
+            f"<p><a href='{like_link}'>👍 like</a> | <a href='{dislike_link}'>👎 dislike</a></p>"
+        )
+
         lines_html.append("</li>")
 
     lines_html.append("</ol></body></html>")

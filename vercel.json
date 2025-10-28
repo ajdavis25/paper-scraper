@@ -1,0 +1,15 @@
+{
+  "builds": [
+    {
+      "src": "webapp/app.py",
+      "use": "@vercel/python"
+    }
+  ],
+  "buildCommand": "pip install -r webapp/requirements.txt",
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "webapp/app.py"
+    }
+  ]
+}
