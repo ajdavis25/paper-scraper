@@ -1,5 +1,5 @@
-flask
-flask_cors
-flask_sqlalchemy
+Flask>=2.3.0
+Flask-Cors>=3.0.10
+Flask-SQLAlchemy>=3.0.0
 aiobotocore
 boto3
