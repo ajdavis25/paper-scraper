@@ -27,24 +27,28 @@ jobs:
             echo "requirements.txt not found"; exit 1
           fi
 
+      # decode gmail credentials and token from Base64 secrets
       - name: Write Gmail credentials and token
         env:
-          GMAIL_CREDENTIALS_JSON: ${{ secrets.GMAIL_CREDENTIALS_JSON }}
-          GMAIL_TOKEN_JSON: ${{ secrets.GMAIL_TOKEN_JSON }}
+          GMAIL_CREDENTIALS_B64: ${{ secrets.GMAIL_CREDENTIALS_B64 }}
+          GMAIL_TOKEN_B64: ${{ secrets.GMAIL_TOKEN_B64 }}
         run: |
           set -e
           mkdir -p ./secrets
-          echo "$GMAIL_CREDENTIALS_JSON" > ./secrets/credentials.json
-          echo "$GMAIL_TOKEN_JSON" > ./secrets/token.json
+          echo "$GMAIL_CREDENTIALS_B64" | base64 --decode > ./secrets/credentials.json
+          echo "$GMAIL_TOKEN_B64" | base64 --decode > ./secrets/token.json
           echo "wrote credentials.json and token.json"
 
+      # decode config.yaml from Base64 secret
       - name: Write config.yaml from secret
         env:
-          CONFIG_YAML: ${{ secrets.CONFIG_YAML }}
+          CONFIG_YAML_B64: ${{ secrets.CONFIG_YAML_B64 }}
         run: |
-          echo "$CONFIG_YAML" > ./config.yaml
-          echo "wrote config.yaml from github secret"
+          set -e
+          echo "$CONFIG_YAML_B64" | base64 --decode > ./config.yaml
+          echo "wrote config.yaml from GitHub secret"
 
+      # run subscription checker
       - name: Run subscription check (subscribe_bot.py)
         env:
           EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
@@ -58,6 +62,7 @@ jobs:
             echo "subscribe_bot.py not found — skipping"
           fi
 
+      # run unsubscription checker
       - name: Run unsubscription check (unsubscribe_bot.py)
         env:
           EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
@@ -71,13 +76,14 @@ jobs:
             echo "unsubscribe_bot.py not found — skipping"
           fi
 
+      # main daily digest step
       - name: Run astro-ph digest bot
         env:
           EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
           EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
           TEST_MODE: ${{ secrets.TEST_MODE }}
-          GMAIL_CREDENTIALS_JSON: ${{ secrets.GMAIL_CREDENTIALS_JSON }}
-          GMAIL_TOKEN_JSON: ${{ secrets.GMAIL_TOKEN_JSON }}
+          GMAIL_CREDENTIALS_B64: ${{ secrets.GMAIL_CREDENTIALS_B64 }}
+          GMAIL_TOKEN_B64: ${{ secrets.GMAIL_TOKEN_B64 }}
         run: |
           set -e
           echo "running astro-ph digest bot..."
