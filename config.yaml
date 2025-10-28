@@ -63,6 +63,7 @@ output:
       - "hayley.west@utsa.edu"
       - "joaquin.duran@utsa.edu"
       - "aviyel.ahiyya@my.utsa.edu"
+      - "jie.li2@my.utsa.edu"
     subject_prefix: "[astro-ph digest]"
     smtp_host: "smtp.gmail.com"
     smtp_port: 587
