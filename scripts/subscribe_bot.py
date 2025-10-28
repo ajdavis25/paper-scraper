@@ -21,27 +21,31 @@ def get_gmail_service():
     token_path = os.path.join(secrets_dir, "token.json")
     cred_path = os.path.join(secrets_dir, "credentials.json")
 
-    # if github secret injected, write it directly
-    if os.getenv("GMAIL_CREDENTIALS_JSON") and not os.path.exists(cred_path):
-        os.makedirs(secrets_dir, exist_ok=True)
+    os.makedirs(secrets_dir, exist_ok=True)
+
+    # write secrets from github if provided
+    if os.getenv("GMAIL_CREDENTIALS_JSON"):
         with open(cred_path, "w", encoding="utf-8") as f:
             f.write(os.getenv("GMAIL_CREDENTIALS_JSON"))
 
-    if os.getenv("GMAIL_TOKEN_JSON") and not os.path.exists(token_path):
+    if os.getenv("GMAIL_TOKEN_JSON"):
         with open(token_path, "w", encoding="utf-8") as f:
             f.write(os.getenv("GMAIL_TOKEN_JSON"))
 
-    # load from token.json first
+    # try loading token.json
     if os.path.exists(token_path):
-        creds = Credentials.from_authorized_user_file(token_path, SCOPES)
+        try:
+            creds = Credentials.from_authorized_user_file(token_path, SCOPES)
+        except Exception as e:
+            print(f"[gmail] failed to load token.json: {e}")
 
+    # if no valid creds, just try from client secrets (if possible)
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
-            print("[gmail] using github token or offline credentials only (no browser)")
-        with open(token_path, "w") as token:
-            token.write(creds.to_json())
+            print("[gmail] WARNING: no valid gmail credentials loaded (headless mode).")
+            return None
 
     return build("gmail", "v1", credentials=creds)
 
