@@ -97,9 +97,7 @@ def check_unsubscribers():
 
         if email_addr:
             print(f"removing {email_addr} from mailing list")
-            removed = remove_from_mailing_list(email_addr)
-            if removed:
-                send_unsub_confirm(service, email_addr)
+            send_unsub_confirm(service, email_addr)  # always send farewell email
             mark_as_read(service, msg["id"])
         else:
             print(f"could not parse sender: {sender}")
