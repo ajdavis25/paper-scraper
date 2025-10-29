@@ -27,7 +27,7 @@ jobs:
             echo "requirements.txt not found"; exit 1
           fi
 
-      # STEP 1: decode gmail credentials and token from Base64 secrets
+      # STEP 1: decode gmail credentials and token from base64 secrets
       - name: Write Gmail credentials and token
         env:
           GMAIL_CREDENTIALS_B64: ${{ secrets.GMAIL_CREDENTIALS_B64 }}
@@ -39,14 +39,14 @@ jobs:
           echo "$GMAIL_TOKEN_B64" | base64 --decode > ./secrets/token.json
           echo "wrote credentials.json and token.json"
 
-      # STEP 2: decode config.yaml from Base64 secret
+      # STEP 2: decode config.yaml from base64 secret
       - name: Write config.yaml from secret
         env:
           CONFIG_YAML_B64: ${{ secrets.CONFIG_YAML_B64 }}
         run: |
           set -e
           echo "$CONFIG_YAML_B64" | base64 --decode > ./config.yaml
-          echo "wrote config.yaml from GitHub secret"
+          echo "wrote config.yaml from github secret"
 
       # STEP 3: run subscription checker
       - name: Run subscription check (subscribe_bot.py)
