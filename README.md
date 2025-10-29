@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/ajdavis25/paper-scraper/main/astroph-bot/assets/banner.png" 
+  <img src="https://github.com/ajdavis25/paper-scraper/blob/main/assets/banner.png" 
        alt="astro-ph digest bot — built out of spite 💥" 
        width="100%">
 </p>
