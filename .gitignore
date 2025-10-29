@@ -5,6 +5,7 @@ config.yaml
 secrets/
 token.json
 credentials.json
+sub_log.json
 
 # virtual environments
 venv/

@@ -26,6 +26,7 @@ jobs:
           else
             echo "requirements.txt not found"; exit 1
           fi
+          sudo apt-get update -y && sudo apt-get install -y jq
 
       - name: Write Gmail credentials and token
         env:
@@ -37,6 +38,14 @@ jobs:
           echo "$GMAIL_CREDENTIALS_B64" | base64 --decode > ./secrets/credentials.json
           echo "$GMAIL_TOKEN_B64" | base64 --decode > ./secrets/token.json
           echo "wrote credentials.json and token.json"
+
+      - name: Write config.yaml from secret
+        env:
+          CONFIG_YAML_B64: ${{ secrets.CONFIG_YAML_B64 }}
+        run: |
+          set -e
+          echo "$CONFIG_YAML_B64" | base64 --decode > ./config.yaml
+          echo "wrote config.yaml from github secret"
 
       - name: Run subscribe/unsubscribe bots and log results
         env:
@@ -50,26 +59,20 @@ jobs:
           TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
           echo "checking for new subscription/unsubscription emails..."
-          echo "{ \"timestamp\": \"$TIMESTAMP\", \"actions\": [" >> $LOGFILE.tmp
+          echo "{ \"timestamp\": \"$TIMESTAMP\", \"actions\": [" > $LOGFILE.tmp
 
-          FIRST_ENTRY=true
-
-          # Run subscribe bot
+          # run subscribe bot
           if [ -f "./scripts/subscribe_bot.py" ]; then
             echo "running subscribe_bot.py"
             SUB_OUTPUT=$(python ./scripts/subscribe_bot.py 2>&1 || true)
-            if [ "$FIRST_ENTRY" = true ]; then
-              FIRST_ENTRY=false
-            else
-              echo "," >> $LOGFILE.tmp
-            fi
             echo "{ \"script\": \"subscribe_bot.py\", \"output\": $(echo "$SUB_OUTPUT" | jq -R -s '.') }" >> $LOGFILE.tmp
           else
             echo "{ \"script\": \"subscribe_bot.py\", \"output\": \"not found\" }" >> $LOGFILE.tmp
           fi
 
-          # Run unsubscribe bot
           echo "," >> $LOGFILE.tmp
+
+          # run unsubscribe bot
           if [ -f "./scripts/unsubscribe_bot.py" ]; then
             echo "running unsubscribe_bot.py"
             UNSUB_OUTPUT=$(python ./scripts/unsubscribe_bot.py 2>&1 || true)
@@ -80,16 +83,15 @@ jobs:
 
           echo "] }" >> $LOGFILE.tmp
 
-          # Merge with existing log if present
+          # merge logs safely (avoid jq errors if file doesn't exist)
           if [ -f "$LOGFILE" ]; then
-            jq -s '.[0] + .[1:]' $LOGFILE $LOGFILE.tmp > $LOGFILE.new || cp $LOGFILE.tmp $LOGFILE.new
+            jq -s '.[0] * .[1]' $LOGFILE $LOGFILE.tmp > $LOGFILE.new || cp $LOGFILE.tmp $LOGFILE.new
           else
             cp $LOGFILE.tmp $LOGFILE.new
           fi
 
           mv $LOGFILE.new $LOGFILE
           rm -f $LOGFILE.tmp
-
           echo "log updated: $LOGFILE"
 
       - name: Upload subscription log artifact
