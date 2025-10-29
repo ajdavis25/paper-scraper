@@ -64,8 +64,11 @@ def send_unsub_confirm(service, to_email):
 
     raw = base64.urlsafe_b64encode(message.as_bytes()).decode("utf-8")
     body = {"raw": raw}
-    service.users().messages().send(userId="me", body=body).execute()
-    print(f"sent unsubscribe confirmation to {to_email}")
+    try:
+        service.users().messages().send(userId="me", body=body).execute()
+        print(f"sent unsubscribe confirmation to {to_email}")
+    except Exception as e:
+        print(f"[gmail] FAILED to send farewell email to {to_email}: {e}")
 
 
 def check_unsubscribers():
