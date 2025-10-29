@@ -68,7 +68,7 @@ astroph-bot/
 - **subscribe:** send an email with the subject `subscribe` to `arxivastrophbot@gmail.com`
 - **unsubscribe:** send an email with the subject `unsubscribe`
 
-the bot will automatically update the mailing list and send a welcome/farewell message
+the bot will automatically update the mailing list every 15 minutes and send a welcome/farewell message
 
 ---
 
