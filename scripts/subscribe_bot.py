@@ -67,6 +67,31 @@ def send_welcome_email(service, to_email):
     print(f"sent welcome email to {to_email}")
 
 
+def domain_is_stanford(address: str) -> bool:
+    """true if address is a stanford email (handles subdomains, case insensitive)."""
+    addr = (address or "").lower().strip()
+    return addr.endswith("@stanford.edu") or addr.endswith(".stanford.edu")
+
+
+def send_stanford_reply(service, to_email):
+    """send an auto reply to stanford users only."""
+    message = MIMEText(
+        "bzzbzz verification pending...\n\n"
+        "system detected a stanford domain. this may require manual approval "
+        "from the committe on gatekeeping.\n\n"
+        "please standby for further instructions.\n\n"
+        "just kidding, you'll be added shortly.\n\n"
+        "clear skies,\nthe astro-ph digest bot"
+    )
+    message["to"] = to_email
+    message["subject"] = "astro-ph digest: gatekeeper verification"
+
+    raw = base64.urlsafe_b64encode(message.as_bytes()).decode("utf-8")
+    body = {"raw": raw}
+    service.users().messages().send(userId="me", body=body).execute()
+    print(f"sent stanford verification joke email to {to_email}")
+
+
 def check_new_subscribers():
     """look for unread emails with 'subscribe' in subject, update config.yaml, and welcome them."""
     service = get_gmail_service()
@@ -88,18 +113,24 @@ def check_new_subscribers():
         headers = {h["name"]: h["value"] for h in data["payload"]["headers"]}
         sender = headers.get("From", "").strip()
 
-        # extract address from "Name <email>"
+        # extract address from "name <email>"
         match = re.search(r"<(.+?)>", sender)
         email_addr = match.group(1) if match else sender
 
-        if email_addr:
-            print(f"subscribing {email_addr}")
-            added = add_to_mailing_list(email_addr)
-            if added:
-                send_welcome_email(service, email_addr)
-            mark_as_read(service, msg["id"])
-        else:
+        if not email_addr:
             print(f"could not parse sender: {sender}")
+            mark_as_read(service, msg["id"])
+            continue
+
+        if domain_is_stanford(email_addr):
+            send_stanford_reply(service, email_addr)
+
+        print(f"subscribing {email_addr}")
+        added = add_to_mailing_list(email_addr)
+        if added:
+            send_welcome_email(service, email_addr)
+
+        mark_as_read(service, msg["id"])
 
 
 def mark_as_read(service, msg_id):
