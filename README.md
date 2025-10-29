@@ -1,7 +1,7 @@
 ![Build](https://github.com/ajdavis25/paper-scraper/actions/workflows/daily_digest.yml/badge.svg)
 ![License](https://img.shields.io/github/license/ajdavis25/paper-scraper)
 ![Stars](https://img.shields.io/github/stars/ajdavis25/paper-scraper?style=social)
-![astro-ph digest bot — built out of spite 💥](assets/banner.png)
+![astro-ph digest bot — built out of spite 💥](banner.png)
 
 built out of spite because stanford gatekept vox charta
 
