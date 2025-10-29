@@ -27,7 +27,7 @@ jobs:
             echo "requirements.txt not found"; exit 1
           fi
 
-      # STEP 1: decode Gmail credentials and token from Base64 secrets
+      # STEP 1: decode gmail credentials and token from Base64 secrets
       - name: Write Gmail credentials and token
         env:
           GMAIL_CREDENTIALS_B64: ${{ secrets.GMAIL_CREDENTIALS_B64 }}
