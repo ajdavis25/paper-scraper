@@ -1,4 +1,6 @@
-![Daily astro-ph Digest](https://github.com/ajdavis25/astro-ph-digest-bot/actions/workflows/daily_digest.yml/badge.svg)
+![Build](https://github.com/ajdavis25/paper-scraper/actions/workflows/daily_digest.yml/badge.svg)
+![License](https://img.shields.io/github/license/ajdavis25/paper-scraper)
+![Stars](https://img.shields.io/github/stars/ajdavis25/paper-scraper?style=social)
 
 built out of spite because stanford gatekept vox charta
 
