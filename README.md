@@ -28,6 +28,7 @@ it includes:
 ---
 
 ### REPO STRUCTURE
+```text
 astroph-bot/
 ├─ bot.py                   # main digest script
 ├─ filters.py               # keyword + author filtering
@@ -41,6 +42,7 @@ astroph-bot/
 ├─ .github/workflows/
 │ └─ daily_digest.yml       # daily automation (8am CT)
 └─ webapp/                  # optional flask frontend
+```
 
 ---
 
