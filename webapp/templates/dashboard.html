@@ -1,18 +1,17 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8">
-    <title>astro-ph digest — dashboard</title>
-</head>
-<body>
-    <h2>liked papers for {{ user.email }}</h2>
-    <ul>
-    {% for p in prefs %}
-        <li>
-            <a href="{{ p.paper.link }}" target="_blank">{{ p.paper.title }}</a>
-            <small>({{ p.paper.arxiv_id }})</small>
-        </li>
-    {% endfor %}
-    </ul>
-</body>
-</html>
+{% extends "base.html" %}
+{% block title %}dashboard — astro-ph digest{% endblock %}
+
+{% block content %}
+  <h2>liked papers for {{ user.email }}</h2>
+  {% if message %}
+    <p><em>{{ message }}</em></p>
+  {% endif %}
+  <ul>
+  {% for p in prefs %}
+    <li>
+      <a href="{{ p.paper.link }}" target="_blank">{{ p.paper.title }}</a>
+      <small>({{ p.paper.arxiv_id }}, {{ p.paper.timestamp }})</small>
+    </li>
+  {% endfor %}
+  </ul>
+{% endblock %}

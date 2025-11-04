@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>{% block title %}astro-ph digest{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+  <header>
+    <h1><a href="/">astro-ph digest</a></h1>
+    <nav>
+      <a href="/subscribe">subscribe</a> |
+      <a href="/unsubscribe">unsubscribe</a> |
+      <a href="/view-feedback">feedback</a>
+    </nav>
+  </header>
+
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer>
+    <p>built out of spite because stanford gatekept vox charta</p>
+  </footer>
+
+  <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+</body>
+</html>
