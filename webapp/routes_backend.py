@@ -150,6 +150,57 @@ def get_preferences():
         return jsonify({"exists": False, "error": str(e)}), 500
 
 
+@app.route("/feedback")
+def feedback():
+    """return all feedback (db + text logs) as json or render the table."""
+    db_entries = []
+    text_entries = []
+
+    # 1. load from feedback.db
+    try:
+        prefs = UserPreference.query.order_by(UserPreference.created_at.desc()).limit(100).all()
+        for pref in prefs:
+            db_entries.append({
+                "email": pref.user.email,
+                "arxiv_id": pref.paper.arxiv_id,
+                "liked": "👍" if pref.liked else "👎",
+                "timestamp": pref.created_at.strftime("%Y-%m-%d %H:%M:%S"),
+                "source": "database"
+            })
+    except Exception as e:
+        print("[feedback] database read error:", e)
+
+    # 2. load from recommendation_feedback.txt
+    text_path = os.path.join(os.path.dirname(__file__), "recommendation_feedback.txt")
+    if os.path.exists(text_path):
+        with open(text_path, "r", encoding="utf-8") as f:
+            for line in f:
+                parts = line.strip().split("] ", 1)
+                if len(parts) == 2:
+                    timestamp = parts[0].strip("[")
+                    text_entries.append({
+                        "email": "anonymous@local",
+                        "arxiv_id": "(recommendation)",
+                        "liked": "👍" if "LIKE" in parts[1] else "👎",
+                        "timestamp": timestamp,
+                        "source": "log"
+                    })
+
+    # merge and sort
+    all_entries = sorted(
+        db_entries + text_entries,
+        key=lambda x: x["timestamp"],
+        reverse=True
+    )
+
+    # if request is ajax (from js), return json
+    if request.headers.get("Accept") == "application/json":
+        return jsonify(all_entries)
+
+    # otherwise render the html table
+    return render_template("feedback.html")
+
+
 # ----------------------------------------------------------
 # user feedback (json -> email + text log)
 # ----------------------------------------------------------
@@ -161,7 +212,7 @@ def user_feedback():
 
     # --- post: handle submission ---
     data = request.get_json(force=True)
-    name = data.get("name", "Anonymous")
+    name = data.get("name", "anonymous")
     email = data.get("email", "")
     message = data.get("message", "")
 
@@ -264,16 +315,49 @@ def recommendation_feedback():
     data = request.get_json(force=True)
     title = data.get("title")
     reaction = data.get("reaction")
+    link = data.get("link")
 
     if not title or reaction not in ["like", "dislike"]:
         return jsonify({"error": "invalid input"}), 400
 
-    log_path = os.path.join(os.path.dirname(__file__), "recommendation_feedback.txt")
-    with open(log_path, "a", encoding="utf-8") as f:
-        f.write(f"[{datetime.utcnow()}] {reaction.upper()} — {title}\n")
+    liked = (reaction == "like")
 
-    print(f"[recommendation-feedback] {reaction} recorded for '{title}'")
-    return jsonify({"message": f"recorded {reaction} for {title}"})
+    # extract arXiv id cleanly
+    arxiv_id = None
+    if link and "arxiv.org/abs/" in link:
+        arxiv_id = link.split("arxiv.org/abs/")[-1].strip()
+    elif link and "arxiv.org/pdf/" in link:
+        arxiv_id = link.split("arxiv.org/pdf/")[-1].split(".pdf")[0]
+    else:
+        arxiv_id = "(unknown)"
+
+    # ensure anonymous user exists
+    user = User.query.filter_by(email="anonymous@local").first()
+    if not user:
+        user = User(email="anonymous@local")
+        db.session.add(user)
+        db.session.commit()
+
+    # create or update paper entry
+    paper = Paper.query.filter_by(arxiv_id=arxiv_id).first()
+    if not paper:
+        paper = Paper(arxiv_id=arxiv_id, link=link or "#")
+        db.session.add(paper)
+        db.session.commit()
+
+    # record preference
+    pref = UserPreference.query.filter_by(user_id=user.id, paper_id=paper.id).first()
+    if pref:
+        pref.liked = liked
+        pref.created_at = datetime.utcnow()
+    else:
+        pref = UserPreference(user_id=user.id, paper_id=paper.id, liked=liked)
+        db.session.add(pref)
+
+    db.session.commit()
+
+    print(f"[recommendation-feedback] {reaction} recorded for '{title}' — {link}")
+    return jsonify({"message": f"recorded {reaction} for {title} (database only)"})
 
 
 # ==========================================================

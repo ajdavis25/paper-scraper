@@ -1,16 +1,20 @@
 console.log("recommendations.js loaded!");
 
+// attach one listener for all like/dislike buttons
 document.addEventListener("click", (e) => {
-  const btn = e.target;
-  if (btn.classList.contains("like-btn") || btn.classList.contains("dislike-btn")) {
-    const paperDiv = btn.closest(".paper");
-    const title = paperDiv.dataset.title;
-    const reaction = btn.classList.contains("like-btn") ? "like" : "dislike";
-    sendReaction(title, reaction, btn);
-  }
+  const btn = e.target.closest(".like-btn, .dislike-btn");
+  if (!btn) return;
+
+  const paperDiv = btn.closest(".paper");
+  const title = paperDiv.dataset.title;
+  const link = paperDiv.dataset.link;
+  const reaction = btn.classList.contains("like-btn") ? "like" : "dislike";
+
+  sendReaction(title, reaction, btn, link);
 });
 
-async function sendReaction(title, reaction, btn) {
+
+async function sendReaction(title, reaction, btn, link) {
   btn.disabled = true;
   const paperDiv = btn.closest(".paper");
   paperDiv.style.opacity = 0.4;
@@ -19,11 +23,10 @@ async function sendReaction(title, reaction, btn) {
     const res = await fetch("/api/recommendation-feedback", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title, reaction }),
+      body: JSON.stringify({ title, reaction, link }),
     });
 
     if (res.ok) {
-      console.log(`recorded ${reaction} for`, title);
       paperDiv.style.transition = "opacity 0.4s ease-out";
       paperDiv.style.opacity = 0;
       setTimeout(() => paperDiv.remove(), 400);

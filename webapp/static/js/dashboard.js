@@ -4,7 +4,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const form = document.getElementById("prefs-form");
   const status = document.getElementById("save-status");
 
-
+  
   // ===============================
   // feedback form submission
   // ===============================
@@ -160,55 +160,60 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     });
   }
-});
 
 
-// ===============================
-// feedback page table loader
-// ===============================
-const feedbackTable = document.getElementById("feedback-table");
-if (feedbackTable) {
-  fetch("/feedback")
-    .then((r) => r.json())
-    .then((data) => {
-      const body = feedbackTable.querySelector("tbody");
-      data.feedback.forEach((f) => {
-        const row = document.createElement("tr");
-        row.innerHTML = `
-          <td>${f.email}</td>
-          <td><a href="https://arxiv.org/abs/${f.arxiv_id}" target="_blank">${f.arxiv_id}</a></td>
-          <td>${f.liked ? "👍" : "👎"}</td>
-          <td>${new Date(f.timestamp).toLocaleString()}</td>
-        `;
-        body.appendChild(row);
+  // ===============================
+  // feedback table loader (merged db + text log)
+  // ===============================
+  const feedbackTable = document.getElementById("feedback-table");
+  if (feedbackTable) {
+    console.log("[feedback] loading entries...");
+    fetch("/feedback", { headers: { "accept": "application/json" } })
+      .then((r) => r.json())
+      .then((data) => {
+        const body = feedbackTable.querySelector("tbody");
+        if (!data.length) {
+          body.innerHTML = "<tr><td colspan='5'><em>no feedback found.</em></td></tr>";
+          return;
+        }
+
+        body.innerHTML = data
+          .map(
+            (f) => `
+          <tr>
+            <td>${f.email}</td>
+            <td><a href="https://arxiv.org/abs/${f.arxiv_id}" target="_blank">${f.arxiv_id}</a></td>
+            <td>${f.liked}</td>
+            <td>${f.timestamp}</td>
+            <td>${f.source || ""}</td>
+          </tr>`
+          )
+          .join("");
+      })
+      .catch((err) => {
+        console.error("[feedback] failed to load:", err);
+        feedbackTable.outerHTML = "<p><em>no feedback found.</em></p>";
       });
-    })
-    .catch(() => {
-      feedbackTable.outerHTML = "<p><em>no feedback found.</em></p>";
-    });
-}
-
-
-// ===============================
-// navbar dashboard link handler
-// ===============================
-document.addEventListener("DOMContentLoaded", () => {
-  const dashLink = document.querySelector("#dashboard-link");
-  if (!dashLink) return;
-
-  // try localStorage
-  const savedEmail = localStorage.getItem("astro_email");
-  if (savedEmail) {
-    dashLink.href = `/dashboard/${savedEmail}`;
   }
 
-  // if the user saves prefs, also store their email
-  const emailField = document.getElementById("email");
-  if (emailField) {
-    emailField.addEventListener("change", () => {
-      if (emailField.value.trim()) {
-        localStorage.setItem("astro_email", emailField.value.trim());
-      }
-    });
+
+  // ===============================
+  // navbar dashboard link handler
+  // ===============================
+  const dashLink = document.querySelector("#dashboard-link");
+  if (dashLink) {
+    const savedEmail = localStorage.getItem("astro_email");
+    if (savedEmail) {
+      dashLink.href = `/dashboard/${savedEmail}`;
+    }
+
+    const emailField = document.getElementById("email");
+    if (emailField) {
+      emailField.addEventListener("change", () => {
+        if (emailField.value.trim()) {
+          localStorage.setItem("astro_email", emailField.value.trim());
+        }
+      });
+    }
   }
 });
