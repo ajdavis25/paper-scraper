@@ -5,6 +5,7 @@ import os, yaml
 
 from .models import db, User, Paper, UserPreference
 from .routes_frontend import frontend
+from ..mailer import send_email
 
 app = Flask(__name__)
 CORS(app)
@@ -98,10 +99,15 @@ def feedback():
     return "\n".join(html)
 
 
+@app.route("/view-feedback")
+def view_feedback_page():
+    """renders the feedback.html frontend (table is populated by JS)."""
+    return render_template("feedback.html")
+
+
 # ----------------------------------------------------------
 # preferences page + rest api
 # ----------------------------------------------------------
-
 @app.route("/preferences", methods=["GET"])
 def preferences_page():
     """render the preferences page (static JS handles submission)."""
@@ -110,16 +116,76 @@ def preferences_page():
 
 @app.route("/api/preferences", methods=["POST"])
 def save_preferences():
-    """save preferences from the front-end form via json post."""
     data = request.get_json(force=True)
     prefs_path = os.path.join(os.path.dirname(__file__), "user_prefs.yaml")
 
-    # persist to yaml for now (later: move into sqlalchemy user model)
-    with open(prefs_path, "w", encoding="utf-8") as f:
-        yaml.safe_dump(data, f)
+    try:
+        with open(prefs_path, "w", encoding="utf-8") as f:
+            yaml.safe_dump(data, f, sort_keys=False)
+        print("[astro-ph bot] saved preferences:", data)
+        return jsonify({"message": "preferences saved successfully!"})
+    except Exception as e:
+        print(f"[astro-ph bot] error saving preferences: {e}")
+        return jsonify({"error": str(e)}), 500
+    
 
-    print("[astro-ph bot] saved preferences:", data)
-    return jsonify({"message": "preferences saved successfully!"})
+@app.route("/api/preferences", methods=["GET"])
+def get_preferences():
+    prefs_path = os.path.join(os.path.dirname(__file__), "user_prefs.yaml")
+
+    if not os.path.exists(prefs_path):
+        return jsonify({"exists": False})
+
+    try:
+        with open(prefs_path, "r", encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+        return jsonify({"exists": True, "data": data})
+    except Exception as e:
+        print(f"[astro-ph bot] error loading preferences: {e}")
+        return jsonify({"exists": False, "error": str(e)}), 500
+
+
+@app.route("/send-feedback", methods=["GET", "POST"])
+def user_feedback():
+    """allow users to submit freeform feedback messages."""
+    if request.method == "POST":
+        print("[debug] received post /feedback")
+        data = request.get_json(force=True)
+        name = data.get("name", "Anonymous")
+        email = data.get("email", "")
+        message = data.get("message", "")
+
+        if not message.strip():
+            return jsonify({"error": "message cannot be empty"}), 400
+
+        # save locally
+        log_path = os.path.join(os.path.dirname(__file__), "user_feedback.txt")
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(f"[{datetime.utcnow()}] {name} <{email}>: {message}\n")
+
+        print(f"[astro-ph bot] received user feedback from {name}: {message}")
+
+        # send email notification using existing mailer config
+        try:
+            # load yaml config (reuse config.yaml at project root)
+            cfg_path = os.path.join(os.path.dirname(__file__), "..", "config.yaml")
+            with open(cfg_path, "r", encoding="utf-8") as f:
+                cfg = yaml.safe_load(f)
+
+            subject = f"[astro-ph feedback] new message from {name}"
+            text_body = f"from: {name} <{email}>\n\n{message}"
+            html_body = f"<p><strong>from:</strong> {name} &lt;{email}&gt;</p><p>{message}</p>"
+
+            send_email(cfg, subject, text_body, html_body)
+            print("[mailer] feedback notification sent")
+        except Exception as e:
+            print(f"[mailer] error sending feedback email: {e}")
+
+        return jsonify({"message": "thank you for your feedback!"})
+
+    # fender form
+    return render_template("feedback_form.html")
+
 
 
 # ----------------------------------------------------------

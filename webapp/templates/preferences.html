@@ -2,23 +2,31 @@
 {% block title %}preferences — astro-ph digest{% endblock %}
 
 {% block content %}
-<div class="container">
+<div class="prefs-container">
   <h2>customize your digest topics</h2>
-  <form id="prefs-form">
-    <label for="keywords">keywords (comma-separated)</label>
-    <textarea id="keywords" name="keywords" rows="3" placeholder="e.g. black hole, accretion, VLBI"></textarea>
 
-    <label for="authors">preferred authors (comma-separated)</label>
-    <textarea id="authors" name="authors" rows="3" placeholder="e.g. Anantua, Quataert, Gammie"></textarea>
+  <form id="prefs-form" class="prefs-form">
+    <div class="form-group">
+      <label for="keywords">keywords (comma-separated)</label>
+      <textarea id="keywords" name="keywords" rows="3" placeholder="e.g. black hole, accretion, VLBI"></textarea>
+    </div>
 
-    <label for="min_score">minimum relevance score</label>
-    <input type="number" id="min_score" name="min_score" value="1.0" step="0.1" min="0">
+    <div class="form-group">
+      <label for="authors">preferred authors (comma-separated)</label>
+      <textarea id="authors" name="authors" rows="3" placeholder="e.g. Anantua, Quataert, Gammie"></textarea>
+    </div>
 
-    <button type="submit">save preferences</button>
+    <div class="form-group-inline">
+      <label for="min_score">minimum relevance score</label>
+      <input type="number" id="min_score" name="min_score" value="1.0" step="0.1" min="0">
+    </div>
+
+    <button type="submit" class="save-btn">save preferences</button>
+
+    <button type="button" class="view-btn" id="view-current">view current preferences</button>
+    <div id="current-prefs" class="current-prefs"></div>
   </form>
 
-  <p id="save-status"></p>
+  <p id="save-status" class="save-status"></p>
 </div>
-
-<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
 {% endblock %}

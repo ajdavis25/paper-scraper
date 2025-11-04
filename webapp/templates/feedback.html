@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}feedback — astro-ph digest{% endblock %}
+
+{% block content %}
+<div class="feedback-container">
+  <h2>user feedback</h2>
+  <p>recent likes and dislikes recorded by users.</p>
+  <table class="feedback-table" id="feedback-table">
+    <thead>
+      <tr>
+        <th>email</th>
+        <th>arXiv id</th>
+        <th>liked?</th>
+        <th>timestamp (UTC)</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+</div>
+{% endblock %}
