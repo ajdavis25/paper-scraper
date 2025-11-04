@@ -380,3 +380,117 @@ section.unsubscribe-section {
   transform: scale(1.2);
   color: red;
 }
+
+/* ===== arXiv category selector styling ===== */
+#categories {
+  width: 100%;
+  max-width: 400px;
+  height: auto;
+  min-height: 8em;
+  padding: 0.6em 0.8em;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  background-color: #fff;
+  font-size: 0.95rem;
+  font-family: inherit;
+  color: #222;
+  outline: none;
+  transition: all 0.2s ease-in-out;
+  box-shadow: 0 0 0 rgba(0, 0, 0, 0);
+}
+
+#categories:hover {
+  border-color: #a00;
+  box-shadow: 0 0 4px rgba(170, 0, 0, 0.3);
+}
+
+#categories:focus {
+  border-color: #b30000;
+  box-shadow: 0 0 6px rgba(180, 0, 0, 0.4);
+}
+
+/* highlight selected items in your theme red */
+#categories option:checked {
+  background-color: #b30000;
+  color: #fff;
+}
+
+/* label and helper text alignment */
+label[for="categories"] {
+  display: block;
+  margin-bottom: 0.3em;
+  font-weight: 600;
+  color: #111;
+}
+
+small {
+  display: block;
+  margin-top: 0.2em;
+  font-size: 0.85rem;
+  color: #666;
+}
+
+.category-tag {
+  display: inline-block;
+  background-color: #f3f3f3;
+  color: #444;
+  font-size: 0.85em;
+  padding: 3px 8px;
+  border-radius: 12px;
+  margin-right: 8px;
+}
+
+.score-tag {
+  display: inline-block;
+  background-color: #ffe6cc;
+  color: #c05a00;
+  font-size: 0.85em;
+  padding: 3px 8px;
+  border-radius: 12px;
+  margin-right: 8px;
+}
+
+.meta {
+  margin-bottom: 0.5em;
+  font-size: 0.9em;
+  color: #666;
+}
+
+.summary {
+  margin-top: 0.5em;
+  margin-bottom: 1em;
+  line-height: 1.4;
+}
+
+/* consistent button styling */
+button, .btn {
+  font-family: inherit;
+  font-size: 1rem;
+  padding: 0.5em 1.2em;
+  border: 2px solid #800000; /* dark red */
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: white;
+  color: #800000;
+}
+
+button:hover, .btn:hover {
+  background: #800000;
+  color: white;
+}
+
+button:active, .btn:active {
+  background: #a00000;
+  border-color: #a00000;
+}
+
+/* make subscribe special (filled by default) */
+button.subscribe, .btn.subscribe {
+  background: #800000;
+  color: white;
+}
+
+button.subscribe:hover, .btn.subscribe:hover {
+  background: #a00000;
+}

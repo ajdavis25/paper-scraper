@@ -1,32 +1,27 @@
-# local secrets
-config.yaml
-.env
-.envrc
-secrets/
-token.json
-credentials.json
-sub_log.json
-
-# virtual environments
-venv/
-webapp/venv/
-
-# cache and compiled files
+# python
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
 
-# database files
+# environment / local configs
+.env
+venv/
 *.db
-*.sqlite3
+*.sqlite
+*.log
+*.yaml
+user_prefs.yaml
+user_feedback.txt
+config.yaml
+config.example.yaml
+feedback.json
 
-# OS / editor junk
+# ide / jupyter / system files
+.ipynb_checkpoints/
+*.ipynb
+.vscode/
 .DS_Store
 Thumbs.db
-
-# logs and temp files
-*.log
-/tmp/
-
-# notebooks
-notebooks/
-*.ipynb
+secrets/credentials.json
+secrets/token.json

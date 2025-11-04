@@ -5,6 +5,25 @@
 <div class="prefs-container">
   <h2>customize your digest topics</h2>
 
+  <label for="categories"><strong>arXiv categories</strong></label>
+  <select id="categories" name="categories" multiple size="6">
+    <option value="astro-ph">astrophysics</option>
+    <option value="cond-mat">condensed matter</option>
+    <option value="cs">computer science</option>
+    <option value="hep-ph">high energy physics - phenomenology</option>
+    <option value="hep-th">high energy physics - theory</option>
+    <option value="math">mathematics</option>
+    <option value="physics">physics (general)</option>
+    <option value="quant-ph">quantum physics</option>
+    <option value="q-bio">quantitative biology</option>
+    <option value="q-fin">quantitative finance</option>
+    <option value="stat">statistics</option>
+    <option value="eess">electrical engineering and systems science</option>
+    <option value="econ">economics</option>
+  </select>
+  <small>hold ctrl (windows) or cmd (mac) to select multiple.</small>
+
+
   <form id="prefs-form" class="prefs-form">
     <div class="form-group">
       <label for="keywords">keywords (comma-separated)</label>

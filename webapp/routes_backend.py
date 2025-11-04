@@ -88,11 +88,17 @@ def user_feedback():
 # ==========================================================
 @app.route("/recommendations")
 def recommendations():
-    """render recommendations using saved keywords."""
+    """
+    render personalized arXiv recommendations using saved preferences,
+    capped at 10 total results and showing the category of origin.
+    """
     import yaml
-    from shared.utils import build_arxiv_query, fetch_arxiv_feed
+    from urllib.parse import quote_plus
+    from shared.utils import fetch_arxiv_feed
 
     prefs_path = os.path.join(os.path.dirname(__file__), "user_prefs.yaml")
+
+    # load preferences
     try:
         with open(prefs_path, "r", encoding="utf-8") as f:
             prefs = yaml.safe_load(f) or {}
@@ -100,21 +106,83 @@ def recommendations():
         print(f"[recommendations] error reading prefs: {e}")
         prefs = {}
 
-    keywords = prefs.get("keywords") or []
-    if not keywords:
-        return render_template("recommendations.html", recs=[], message="no keywords found in preferences.")
-
-    url = build_arxiv_query(keywords, max_results=5)
-    print(f"[recommendations] fetching: {url}")
-
+    keywords = prefs.get("keywords", [])
+    categories = prefs.get("categories", ["astro-ph"])
     try:
-        recs = fetch_arxiv_feed(url)
-        msg = f"showing {len(recs)} recent papers matching your interests."
-    except Exception as e:
-        print(f"[recommendations] error fetching arxiv: {e}")
-        recs, msg = [], "error fetching arXiv feed."
+        min_score = float(prefs.get("min_score", 1.0))
+    except Exception:
+        min_score = 1.0
 
-    return render_template("recommendations.html", recs=recs, message=msg)
+    if not keywords:
+        return render_template(
+            "recommendations.html",
+            recs=[],
+            message="no keywords found in preferences. add some in your dashboard first!",
+        )
+
+    # build encoded keywords for search
+    encoded_terms = [f'all:"{quote_plus(k.strip())}"' for k in keywords if k.strip()]
+    if not encoded_terms:
+        return render_template("recommendations.html", recs=[], message="no valid keywords provided.")
+
+    all_recs = []
+    for cat in categories:
+        cat = cat.strip()
+        if not cat:
+            continue
+
+        query = "+OR+".join(encoded_terms) + f"+AND+cat:{quote_plus(cat)}"
+        url = (
+            "https://export.arxiv.org/api/query?"
+            f"search_query={query}&start=0&max_results=10&sortBy=submittedDate&sortOrder=descending"
+        )
+        print(f"[recommendations] fetching from {cat}: {url}")
+
+        try:
+            recs = fetch_arxiv_feed(url)
+            # tag category
+            for r in recs:
+                r["category"] = cat
+            all_recs.extend(recs)
+        except Exception as e:
+            print(f"[recommendations] error fetching {cat}: {e}")
+
+    # dedup by link
+    dedup = {}
+    for r in all_recs:
+        link = r.get("link") or ""
+        if link and link not in dedup:
+            dedup[link] = r
+
+    # scoring
+    def relevance_score(paper):
+        text = f"{paper.get('title','')} {paper.get('summary','')}".lower()
+        score = 0
+        for kw in keywords:
+            kw_clean = kw.strip().lower()
+            if kw_clean and kw_clean in text:
+                score += 1
+        return score
+
+    scored = []
+    for r in dedup.values():
+        s = relevance_score(r)
+        if s >= min_score:
+            r["score"] = s
+            scored.append(r)
+
+    # sort by score and take only top 10 total
+    scored.sort(key=lambda x: x.get("score", 0), reverse=True)
+    scored = scored[:10]
+
+    msg = (
+        f"showing {len(scored)} recent papers across {', '.join(categories)} "
+        f"with score ≥ {min_score}."
+        if scored else
+        "no papers met your minimum relevance threshold."
+    )
+
+    return render_template("recommendations.html", recs=scored, message=msg)
 
 
 # ==========================================================
@@ -167,6 +235,11 @@ def api_preferences():
         try:
             with open(prefs_path, "r", encoding="utf-8") as f:
                 prefs = yaml.safe_load(f) or {}
+            # ensure backward compatibility
+            prefs.setdefault("keywords", [])
+            prefs.setdefault("authors", [])
+            prefs.setdefault("min_score", 1.0)
+            prefs.setdefault("categories", ["astro-ph"])  # default field
             return jsonify(prefs)
         except Exception as e:
             print(f"[api/preferences] error loading prefs: {e}")
@@ -174,9 +247,18 @@ def api_preferences():
     else:
         data = request.get_json(force=True)
         try:
+            # normalize missing fields before saving
+            prefs = {
+                "keywords": data.get("keywords", []),
+                "authors": data.get("authors", []),
+                "min_score": data.get("min_score", 1.0),
+                "categories": data.get("categories", ["astro-ph"])
+            }
+
             with open(prefs_path, "w", encoding="utf-8") as f:
-                yaml.safe_dump(data, f, sort_keys=False)
-            print("[api/preferences] preferences saved:", data)
+                yaml.safe_dump(prefs, f, sort_keys=False)
+
+            print("[api/preferences] preferences saved:", prefs)
             return jsonify({"status": "ok"})
         except Exception as e:
             print(f"[api/preferences] error saving prefs: {e}")
@@ -184,32 +266,38 @@ def api_preferences():
 
 
 # ==========================================================
-# feedback viewer (admin)
+# feedback viewer route (HTML + JSON modes)
 # ==========================================================
 @app.route("/feedback", methods=["GET"])
-def feedback_entries():
-    """
-    return recent like/dislike feedback as json for the user feedback table.
-    works even if database missing — will fall back to empty list.
-    """
+def feedback():
+    """show or return all feedback entries (likes/dislikes)."""
+    import sqlite3
+    from flask import request
+
+    db_path = os.path.join(os.path.dirname(__file__), "feedback.db")
+
+    # if db missing, return empty set
+    if not os.path.exists(db_path):
+        if "application/json" in request.headers.get("accept", ""):
+            return jsonify([])
+        return render_template("feedback.html", feedback=[])
+    
     try:
-        # if you’re using a db:
-        # entries = Feedback.query.order_by(Feedback.timestamp.desc()).limit(100).all()
-        # data = [e.as_dict() for e in entries]
+        conn = sqlite3.connect(db_path)
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute("SELECT * FROM feedback ORDER BY timestamp DESC").fetchall()
+        conn.close()
 
-        # fallback: check for local feedback.json file
-        import json, os
-        feedback_path = os.path.join(os.path.dirname(__file__), "feedback.json")
-        if os.path.exists(feedback_path):
-            with open(feedback_path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-        else:
-            data = []
-
-        return jsonify(data)
+        entries = [dict(r) for r in rows]
     except Exception as e:
-        print(f"[feedback] error loading entries: {e}")
-        return jsonify([])
+        print(f"[feedback] db error: {e}")
+        entries = []
+
+    # return json if requested by js fetch()
+    if "application/json" in request.headers.get("accept", ""):
+        return jsonify(entries)
+    else:
+        return render_template("feedback.html", feedback=entries)
 
 
 # ==========================================================
