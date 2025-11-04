@@ -1,34 +1,130 @@
-body {
-  font-family: 'Segoe UI', sans-serif;
-  margin: 2em auto;
-  max-width: 800px;
-  color: #222;
-  line-height: 1.6;
+/* ===============================
+   astro-ph digest — ui theme
+   =============================== */
+
+:root {
+  --astro-red: #a70000;
+  --astro-light: #f8f8f8;
+  --astro-accent: #c70000;
+  --astro-text: #222;
+  --astro-link: #a70000;
+  --astro-hover: #800000;
+  --astro-border: #ddd;
+  --astro-muted: #666;
 }
 
+body {
+  font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  background-color: var(--astro-light);
+  color: var(--astro-text);
+  line-height: 1.7;
+  margin: 2.5em auto;
+  max-width: 880px;
+  padding: 0 1em;
+}
+
+/* ========== HEADER ========== */
 header {
-  border-bottom: 1px solid #ddd;
-  margin-bottom: 1em;
+  border-bottom: 2px solid var(--astro-border);
+  padding-bottom: 0.7em;
+  margin-bottom: 1.5em;
+}
+
+h1 {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 2em;
+  margin: 0.2em 0;
+  color: var(--astro-red);
 }
 
 h1 a {
   text-decoration: none;
-  color: #b00;
+  color: var(--astro-red);
+}
+
+h1 a:hover {
+  color: var(--astro-hover);
+}
+
+/* ========== NAVIGATION ========== */
+nav {
+  margin-top: 0.3em;
 }
 
 nav a {
   margin-right: 1em;
-  color: #333;
+  color: var(--astro-link);
   text-decoration: none;
+  font-weight: 500;
 }
 
 nav a:hover {
   text-decoration: underline;
+  color: var(--astro-hover);
 }
 
+/* ========== MAIN CONTENT ========== */
+main {
+  background: #fff;
+  border: 1px solid var(--astro-border);
+  padding: 2em;
+  border-radius: 6px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+}
+
+/* button-style links (subscribe/unsubscribe/dashboard) */
+a.btn {
+  display: inline-block;
+  background: var(--astro-red);
+  color: white;
+  padding: 0.6em 1.2em;
+  border-radius: 4px;
+  text-decoration: none;
+  font-weight: 600;
+  transition: background 0.2s ease;
+}
+
+a.btn:hover {
+  background: var(--astro-hover);
+}
+
+/* subtle secondary link button (like unsubscribe) */
+a.btn-secondary {
+  background: transparent;
+  color: var(--astro-link);
+  border: 1px solid var(--astro-link);
+}
+
+a.btn-secondary:hover {
+  background: var(--astro-link);
+  color: white;
+}
+
+/* ========== PAPER LIST ========== */
+ul.paper-list {
+  list-style: none;
+  padding-left: 0;
+}
+
+ul.paper-list li {
+  margin-bottom: 1em;
+}
+
+ul.paper-list a {
+  color: var(--astro-link);
+  font-weight: 600;
+}
+
+ul.paper-list a:hover {
+  color: var(--astro-hover);
+}
+
+/* ========== FOOTER ========== */
 footer {
   margin-top: 3em;
+  padding-top: 1em;
+  border-top: 1px solid var(--astro-border);
   font-size: 0.9em;
-  color: #666;
+  color: var(--astro-muted);
   text-align: center;
 }

@@ -1,4 +1,4 @@
-import re, os, yaml, feedparser, requests, datetime as dt
+import re, os, yaml, feedparser, requests, urllib.parse, datetime as dt
 from filters import score_paper, match_category
 from mailer import send_email
 from curator import merge_preferences
@@ -35,12 +35,12 @@ def canon_abs_url(paper):
 
 def load_config(path=None):
     """
-    load YAML config, automatically detecting path from CLI or repo layout.
+    load yaml config, automatically detecting path from cli or repo layout.
     works both locally and in github actions.
     """
     import sys
 
-    # allow explicit CLI arg
+    # allow explicit cli arg
     if not path and len(sys.argv) > 1:
         path = sys.argv[1]
 
@@ -68,36 +68,66 @@ def load_config(path=None):
 
 
 def build_search_query(cfg):
-    cats = cfg["arxiv"].get("categories", ["astro-ph*"])
-    cat_query = " OR ".join([f"cat:{c}" for c in cats])
-    return f"({cat_query})"
+    cats = cfg["arxiv"].get("categories", ["astro-ph.CO"])
+    # properly join categories
+    if len(cats) > 1:
+        cat_query = " OR ".join([f"cat:{c}" for c in cats])
+    else:
+        cat_query = f"cat:{cats[0]}"
+    return cat_query
 
 
 def fetch_recent(cfg):
+    import urllib.parse
+    import gzip
+
     max_results = cfg["arxiv"].get("max_results", 50)
     query = build_search_query(cfg)
     days_back = cfg["arxiv"].get("days_back", 1)
     since = dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=days_back)
 
     base = "https://export.arxiv.org/api/query"
+    encoded_query = urllib.parse.quote(query, safe="+:()")
     params = {
-        "search_query": query,
+        "search_query": encoded_query,
         "sortBy": "submittedDate",
         "sortOrder": "descending",
         "max_results": str(max_results),
         "start": "0",
     }
     url = base + "?" + "&".join(f"{k}={v}" for k, v in params.items())
+    print(f"[astro-ph bot] query URL: {url}")
+
+    headers = {"User-Agent": "astro-ph-digest-bot/1.0 (mailto:ajd96@proton.me)"}
 
     try:
-        resp = requests.get(url, timeout=20)
+        resp = requests.get(url, headers=headers, timeout=20)
         resp.raise_for_status()
+
+        # only decompress if truly gzipped
+        content = resp.content
+        if resp.headers.get("Content-Encoding") == "gzip":
+            try:
+                content = gzip.decompress(content)
+                data = content.decode("utf-8", errors="ignore")
+                print("[astro-ph bot] decompressed gzip response")
+            except Exception:
+                # fall back silently if it's not actually gzipped
+                data = resp.text
+        else:
+            data = resp.text
+
+        if "<entry>" not in data:
+            print("[astro-ph bot] warning: no <entry> tags in feed XML!")
+            print(data[:500])
     except Exception as e:
         print(f"error: could not fetch from arXiv: {e}")
         return []
 
-    feed = feedparser.parse(resp.text)
+    feed = feedparser.parse(data)
+    print(f"[astro-ph bot] feedparser found {len(feed.entries)} entries")
     results = []
+
     for entry in feed.entries:
         try:
             pub = dt.datetime.fromisoformat(entry.published.replace("Z", "+00:00"))
@@ -105,19 +135,18 @@ def fetch_recent(cfg):
             pub = dt.datetime.now(dt.timezone.utc)
 
         entry_id = getattr(entry, "id", "")
-        m = _ARXIV_ID_RE.search(entry_id) or _ARXIV_ID_RE.search(entry.link)
+        m = _ARXIV_ID_RE.search(entry_id) or _ARXIV_ID_RE.search(getattr(entry, "link", ""))
         arxiv_id = (m.group(1) + (m.group(2) or "")) if m else ""
 
-        if pub >= since:
-            results.append({
-                "title": entry.title.strip(),
-                "summary": entry.summary.strip(),
-                "published": pub,
-                "link": entry.link,
-                "id": entry_id,
-                "arxiv_id": arxiv_id,
-                "authors": [a.name for a in entry.authors],
-            })
+        results.append({
+            "title": entry.title.strip(),
+            "summary": entry.summary.strip(),
+            "published": pub,
+            "link": getattr(entry, "link", ""),
+            "id": entry_id,
+            "arxiv_id": arxiv_id,
+            "authors": [a.name for a in getattr(entry, "authors", [])],
+        })
 
     print(f"[astro-ph bot] fetched {len(results)} papers (max {max_results})")
     return results
@@ -151,9 +180,14 @@ def curate(cfg, results):
                 "published": r.get("published"),
                 "score": score,
                 "details": details,
+                "arxiv_id": r.get("arxiv_id", "") or (url.split("/")[-1] if url else ""),
             })
 
     print(f"[astro-ph bot] curated {len(curated)} papers (score ≥ {prefs.get('min_score', 1.0)})")
+    print(f"[astro-ph bot] curated {len(curated)} / {len(results)} papers (score ≥ {prefs.get('min_score', 1.0)})")
+    for r in results[:10]:  # show first few raw entries
+        print("→", r["title"][:80])
+
     return curated
 
 
@@ -199,46 +233,68 @@ def format_authors(authors, max_authors=5):
         return ", ".join(names)
 
 
-def make_email_body(cfg, curated):
-    lines_txt = []
-    lines_html = ['<html><body><h2>astro-ph digest</h2><ol>']
+def render_paper_entry_html(paper, user_email, track_base):
+    """
+    build one paper block (html) with personalized like/dislike links.
+    """
+    arxiv_id = paper.get("arxiv_id") or (paper.get("url", "").split("/")[-1])
+    title = paper.get("title", "")
+    link = paper.get("url") or canon_abs_url(paper) or ""
+    authors = paper.get("authors", [])
+    authors_line = ", ".join(authors) if isinstance(authors, list) else str(authors)
+    like_link = f"{track_base}/like?email={user_email}&arxiv_id={arxiv_id}&liked=true"
+    dislike_link = f"{track_base}/like?email={user_email}&arxiv_id={arxiv_id}&liked=false"
 
-    # your live backend base url:
-    email_base = "https://astro-digest.vercel.app"
+    parts = [
+        "<li>",
+        f'<p><b><a href="{link}">{title}</a></b></p>',
+    ]
+    if authors_line:
+        parts.append(f"<p><i>{authors_line}</i></p>")
+    if paper.get("summary"):
+        parts.append(f"<p>{paper['summary']}</p>")
+    parts.append(f"<p><a href='{like_link}'>👍 like</a> | <a href='{dislike_link}'>👎 dislike</a></p>")
+    parts.append("</li>")
+    return "\n".join(parts)
 
-    for r in curated:
-        url = r.get("url") or canon_abs_url(r) or ""
-        title = r.get("title", "")
-        abstract = r.get("summary", "")
-        authors = r.get("authors", [])
-        arxiv_id = r.get("arxiv_id", "") or url.split("/")[-1]
-        authors_line = ", ".join(authors) if isinstance(authors, list) else str(authors)
 
-        # like/dislike feedback links
-        like_link = f"{email_base}/like?email=ashton.davis3@my.utsa.edu&arxiv_id={arxiv_id}&liked=true"
-        dislike_link = f"{email_base}/like?email=ashton.davis3@my.utsa.edu&arxiv_id={arxiv_id}&liked=false"
+def render_paper_entry_text(paper, user_email, track_base):
+    """
+    build one paper block (plain text) with personalized like/dislike links.
+    """
+    arxiv_id = paper.get("arxiv_id") or (paper.get("url", "").split("/")[-1])
+    title = paper.get("title", "")
+    link = paper.get("url") or canon_abs_url(paper) or ""
+    authors = paper.get("authors", [])
+    authors_line = ", ".join(authors) if isinstance(authors, list) else str(authors)
+    like_link = f"{track_base}/like?email={user_email}&arxiv_id={arxiv_id}&liked=true"
+    dislike_link = f"{track_base}/like?email={user_email}&arxiv_id={arxiv_id}&liked=false"
 
-        # TEXT email section
-        lines_txt.append(f"{title}\n{url}\n")
-        if authors_line:
-            lines_txt.append(f"authors: {authors_line}\n")
-        lines_txt.append(abstract + "\n")
-        lines_txt.append(f"👍 like: {like_link}\n👎 dislike: {dislike_link}\n")
-        lines_txt.append("-" * 60)
+    lines = []
+    lines.append(f"{title}\n{link}\n")
+    if authors_line:
+        lines.append(f"authors: {authors_line}\n")
+    if paper.get("summary"):
+        lines.append(paper["summary"] + "\n")
+    lines.append(f"👍 like: {like_link}\n👎 dislike: {dislike_link}\n")
+    lines.append("-" * 60)
+    return "\n".join(lines)
 
-        # HTML email section
-        lines_html.append("<li>")
-        lines_html.append(f'<p><b><a href="{url}">{title}</a></b></p>')
-        if authors_line:
-            lines_html.append(f"<p><i>{authors_line}</i></p>")
-        lines_html.append(f"<p>{abstract}</p>")
-        lines_html.append(
-            f"<p><a href='{like_link}'>👍 like</a> | <a href='{dislike_link}'>👎 dislike</a></p>"
-        )
-        lines_html.append("</li>")
 
-    lines_html.append("</ol></body></html>")
-    return "\n".join(lines_txt), "\n".join(lines_html)
+def make_email_body_for_recipient(user_email, curated, track_base):
+    """
+    build (text, html) bodies personalized for a single recipient
+    so the like/dislike links embed their email.
+    """
+    text_blocks = []
+    html_blocks = ['<html><body><h2>astro-ph digest</h2><ol>']
+
+    for p in curated:
+        text_blocks.append(render_paper_entry_text(p, user_email, track_base))
+        html_blocks.append(render_paper_entry_html(p, user_email, track_base))
+
+    html_blocks.append("</ol></body></html>")
+    return "\n".join(text_blocks), "\n".join(html_blocks)
 
 
 def main():
@@ -251,6 +307,13 @@ def main():
         print(f"[astro-ph bot] TEST MODE ENABLED — will only send to {test_addr}")
         cfg["output"]["email"]["to_addrs"] = [test_addr]
 
+    # where your flask app is serving the /like endpoint
+    track_base = (
+        cfg.get("output", {})
+           .get("email", {})
+           .get("track_base", "https://astro-digest.vercel.app")
+    )
+
     cfg["preferences"] = merge_preferences(cfg["preferences"])
     print("[astro-ph bot] merged keywords:", cfg["preferences"])
 
@@ -260,7 +323,9 @@ def main():
     if not curated:
         print("no matches today.")
         subject = f'{cfg["output"]["email"]["subject_prefix"]} {dt.date.today()} — 0 papers'
-        send_email(cfg, subject, "no matching papers found today.", "<p>no matches today.</p>")
+        # still send a “no matches” note to list (or just to you in test mode)
+        for rcpt in cfg["output"]["email"]["to_addrs"]:
+            send_email(cfg, subject, "no matching papers found today.", "<p>no matches today.</p>", to_override=[rcpt])
         return
 
     limits = cfg.get("limits", {})
@@ -271,14 +336,18 @@ def main():
     selected, eff_thr = select_top(curated, min_keep=min_keep, max_keep=max_keep, base_min_score=base_thr)
     print(f"[astro-ph bot] selected {len(selected)} (effective threshold={eff_thr}) out of {len(curated)} curated")
 
-    # confirm recipients before sending
-    print("[astro-ph bot] sending digest to:", cfg["output"]["email"]["to_addrs"])
+    recipients = cfg["output"]["email"]["to_addrs"]
+    print("[astro-ph bot] sending digest to:", recipients)
 
-    text_body, html_body = make_email_body(cfg, selected)
     n = len(selected)
     subject = f'{cfg["output"]["email"]["subject_prefix"]} {dt.date.today()} — {n} paper{"s" if n != 1 else ""}'
-    send_email(cfg, subject, text_body, html_body)
-    print(f"emailed {n} curated papers.")
+
+    # personalize for each recipient so their like/dislike links carry their email
+    for rcpt in recipients:
+        text_body, html_body = make_email_body_for_recipient(rcpt, selected, track_base)
+        send_email(cfg, subject, text_body, html_body, to_override=[rcpt])
+
+    print(f"emailed {n} curated papers to {len(recipients)} recipient(s).")
 
 
 if __name__ == "__main__":

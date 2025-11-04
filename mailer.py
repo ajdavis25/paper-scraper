@@ -7,12 +7,12 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-def send_email(cfg, subject, text_body, html_body):
+def send_email(cfg, subject, text_body, html_body, to_override=None):
     """
     send an email using credentials from environment variables
     or config.yaml (via cfg["output"]["email"]).
 
-    the YAML config should define:
+    the yaml config should define:
       output:
         email:
           from_addr: ...
@@ -22,28 +22,38 @@ def send_email(cfg, subject, text_body, html_body):
           smtp_host: "smtp.gmail.com"
           smtp_port: 587
           use_starttls: true
+
+    optionally, pass `to_override=["someone@example.com"]`
+    to override the configured recipient list.
     """
     em = cfg["output"]["email"]
 
+    # determine recipients
+    to_addrs = to_override or em.get("to_addrs", [])
+    if not to_addrs:
+        raise ValueError("no recipients specified.")
+
     # build MIME message
     msg = MIMEMultipart("alternative")
-    msg["subject"] = subject
-    msg["from"] = em["from_addr"]
-    msg["to"] = ", ".join(em["to_addrs"])
+    msg["Subject"] = subject
+    msg["From"] = em["from_addr"]
+    msg["To"] = ", ".join(to_addrs)
     msg.attach(MIMEText(text_body, "plain", "utf-8"))
     msg.attach(MIMEText(html_body, "html", "utf-8"))
 
     # load password securely
-    password = os.getenv(em.get("password_env", "EMAIL_PASS"), "")
+    pw_env = em.get("password_env", "EMAIL_PASS")
+    password = os.getenv(pw_env, "")
     if not password:
-        raise RuntimeError(
-            f"missing password in environment variable: {em.get('password_env', 'EMAIL_PASS')}"
-        )
+        raise RuntimeError(f"missing password in environment variable: {pw_env}")
 
     # connect and send
-    with smtplib.SMTP(em["smtp_host"], em["smtp_port"]) as s:
-        if em.get("use_starttls", True):
-            s.starttls()
-        s.login(em["username"], password)
-        s.sendmail(em["from_addr"], em["to_addrs"], msg.as_string())
-        print(f"email sent to {', '.join(em['to_addrs'])}")
+    try:
+        with smtplib.SMTP(em["smtp_host"], em["smtp_port"], timeout=20) as s:
+            if em.get("use_starttls", True):
+                s.starttls()
+            s.login(em["username"], password)
+            s.sendmail(em["from_addr"], to_addrs, msg.as_string())
+            print(f"[mailer] email sent to {', '.join(to_addrs)}")
+    except Exception as e:
+        print(f"[mailer] ERROR sending to {', '.join(to_addrs)}: {e}")
