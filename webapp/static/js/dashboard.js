@@ -29,7 +29,7 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
-      fetch("/feedback", {
+      fetch("/send-feedback", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),

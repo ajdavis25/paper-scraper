@@ -1,4 +1,4 @@
-import re, os, yaml, feedparser, requests, urllib.parse, datetime as dt
+import re, os, yaml, feedparser, requests, datetime as dt
 from filters import score_paper, match_category
 from mailer import send_email
 from curator import merge_preferences

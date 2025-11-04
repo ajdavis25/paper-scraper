@@ -1,9 +1,8 @@
 from __future__ import print_function
 from googleapiclient.discovery import build
 from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
-import os.path, re, yaml, base64, json
+import os.path, re, yaml, base64
 from email.mime.text import MIMEText
 
 # gmail scopes for read + send

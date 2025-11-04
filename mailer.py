@@ -35,19 +35,44 @@ def send_email(cfg, subject, text_body, html_body, to_override=None):
             f"missing password in environment variable: {em.get('password_env', 'EMAIL_PASS')}"
         )
 
-    # build smtp connection once
-    with smtplib.SMTP(em["smtp_host"], em["smtp_port"]) as s:
-        if em.get("use_starttls", True):
-            s.starttls()
-        s.login(em["username"], password)
+    recipients = to_override or em.get("to_addrs", [])
+    if not recipients:
+        print("[mailer] warning: no recipients found in config.yaml")
+        return
 
-        for addr in em["to_addrs"]:
-            msg = MIMEMultipart("alternative")
-            msg["subject"] = subject
-            msg["from"] = em["from_addr"]
-            msg["to"] = addr  # only this user
-            msg.attach(MIMEText(text_body, "plain", "utf-8"))
-            msg.attach(MIMEText(html_body, "html", "utf-8"))
+    try:
+        with smtplib.SMTP(em["smtp_host"], em["smtp_port"]) as s:
+            if em.get("use_starttls", True):
+                s.starttls()
 
-            s.sendmail(em["from_addr"], addr, msg.as_string())
-            print(f"[mailer] sent digest to {addr}")
+            try:
+                print("[mailer debug]", {
+                "username": em["username"],
+                "password_length": len(password),
+                "password_preview": password[:4] + "..." if password else None
+            })
+                s.login(em["username"], password)
+            except smtplib.SMTPAuthenticationError as e:
+                print("[mailer] gmail rejected credentials — please recheck EMAIL_FROM / EMAIL_PASS in your .env")
+                print(f"[details] {e.smtp_error.decode('utf-8')}")
+                return
+            except Exception as e:
+                print(f"[mailer] unexpected error during login: {e}")
+                return
+
+            for addr in (to_override or em["to_addrs"]):
+                msg = MIMEMultipart("alternative")
+                msg["Subject"] = subject
+                msg["From"] = em["from_addr"]
+                msg["To"] = addr
+                msg.attach(MIMEText(text_body, "plain", "utf-8"))
+                msg.attach(MIMEText(html_body, "html", "utf-8"))
+
+                try:
+                    s.sendmail(em["from_addr"], addr, msg.as_string())
+                    print(f"[mailer] sent email to {addr}")
+                except Exception as e:
+                    print(f"[mailer] failed to send email to {addr}: {e}")
+
+    except Exception as e:
+        print(f"[mailer] fatal error: {e}")

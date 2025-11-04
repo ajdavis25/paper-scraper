@@ -351,3 +351,32 @@ section.unsubscribe-section {
 
 #sub-status.error { color: #b31b1b; }
 #sub-status.info  { color: #555; }
+
+/* ===== RECOMMENDATIONS FEEDBACK BUTTONS ===== */
+.feedback-buttons {
+  margin-top: 8px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.like-btn,
+.dislike-btn {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: transform 0.15s ease, color 0.15s ease;
+  color: #555;
+}
+
+.like-btn:hover {
+  transform: scale(1.2);
+  color: green;
+}
+
+.dislike-btn:hover {
+  transform: scale(1.2);
+  color: red;
+}

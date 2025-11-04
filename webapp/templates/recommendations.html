@@ -2,20 +2,22 @@
 {% block title %}recommendations — astro-ph digest{% endblock %}
 
 {% block content %}
-<div class="prefs-container">
-  <h2>recommended papers</h2>
-  <p><em>{{ message }}</em></p>
+  {% for rec in recs %}
+    <div class="paper" id="paper-{{ loop.index }}">
+      <a href="{{ rec.link }}" target="_blank" class="title">{{ rec.title }}</a>
+      <div class="date">{{ rec.published }}</div>
+      <p>{{ rec.summary }}</p>
 
-  {% if recs %}
-  <ul class="paper-list">
-    {% for r in recs %}
-    <li>
-      <a href="{{ r.link }}" target="_blank">{{ r.title }}</a><br>
-      <small>{{ r.published }}</small><br>
-      <p>{{ r.summary }}</p>
-    </li>
-    {% endfor %}
-  </ul>
-  {% endif %}
-</div>
+      <div class="feedback-buttons">
+        <button class="btn btn-light like-btn"
+                onclick="sendReaction('{{ rec.title|escape }}', 'like', this)">👍 like</button>
+        <button class="btn btn-light dislike-btn"
+                onclick="sendReaction('{{ rec.title|escape }}', 'dislike', this)">👎 dislike</button>
+      </div>
+    </div>
+  {% endfor %}
+{% endblock %}
+
+{% block scripts %}
+  <script src="{{ url_for('static', filename='js/recommendations.js') }}"></script>
 {% endblock %}
