@@ -11,7 +11,7 @@ CORS(app)
 # use /tmp — this is the only writable path on vercel
 if os.name == "nt":  # windows
     db_path = os.path.join(os.path.dirname(__file__), "feedback.db")
-else:  # vercel (Linux)
+else:  # vercel (linux)
     db_path = os.path.join("/tmp", "feedback.db")
 app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{db_path}"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
@@ -117,12 +117,30 @@ def view_feedback():
 
 @app.route("/dashboard/<email>")
 def dashboard(email):
-    feedback_entries = Feedback.query.filter_by(email=email, liked=True).order_by(Feedback.timestamp.desc()).all()
-    prefs = [
-        {"paper": {"title": f"arXiv:{entry.arxiv_id}", "link": f"https://arxiv.org/abs/{entry.arxiv_id}", "arxiv_id": entry.arxiv_id}}
-        for entry in feedback_entries
-    ]
+    """render a dashboard showing all liked papers for the user."""
+    feedback_entries = (
+        Feedback.query.filter_by(email=email, liked=True)
+        .order_by(Feedback.timestamp.desc())
+        .all()
+    )
+
+    prefs = []
+    for entry in feedback_entries:
+        prefs.append({
+            "paper": {
+                "title": f"arXiv:{entry.arxiv_id}",
+                "link": f"https://arxiv.org/abs/{entry.arxiv_id}",
+                "arxiv_id": entry.arxiv_id,
+                "timestamp": entry.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
+            }
+        })
+
     user = {"email": email}
+
+    if not prefs:
+        message = "no liked papers yet — go like some in your digests!"
+        return render_template("dashboard.html", user=user, prefs=[], message=message)
+
     return render_template("dashboard.html", user=user, prefs=prefs)
 
 
