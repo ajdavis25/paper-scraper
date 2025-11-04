@@ -4,7 +4,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const form = document.getElementById("prefs-form");
   const status = document.getElementById("save-status");
 
-  
+
   // ===============================
   // feedback form submission
   // ===============================
@@ -69,39 +69,40 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
 
-  // ===============================
-  // view current prefs
-  // ===============================
-  const viewBtn = document.getElementById("view-current");
-  const currentPrefs = document.getElementById("current-prefs");
+// ===============================
+// view current prefs
+// ===============================
+const viewBtn = document.getElementById("view-current");
+const currentPrefs = document.getElementById("current-prefs");
 
-  if (viewBtn && currentPrefs) {
-    viewBtn.addEventListener("click", () => {
-      fetch("/api/preferences")
-        .then((r) => r.json())
-        .then((data) => {
-          if (!data.exists) {
-            currentPrefs.innerHTML = "<em>no preferences saved yet.</em>";
-            return;
-          }
-          const prefs = data.data;
-          const kw = prefs.keywords?.join(", ") || "(none)";
-          const au = prefs.authors?.join(", ") || "(none)";
-          const sc = prefs.min_score || 1.0;
+if (viewBtn && currentPrefs) {
+  viewBtn.addEventListener("click", () => {
+    fetch("/api/preferences")
+      .then(r => r.json())
+      .then(prefs => {
+        // update the form fields
+        document.querySelector("#keywords").value = (prefs.keywords || []).join(", ");
+        document.querySelector("#authors").value = (prefs.authors || []).join(", ");
+        document.querySelector("#min_score").value = prefs.min_score || 1.0;
 
-          currentPrefs.innerHTML = `
-            <div class="prefs-summary">
-              <strong>keywords:</strong> ${kw}<br>
-              <strong>authors:</strong> ${au}<br>
-              <strong>min score:</strong> ${sc}
-            </div>
-          `;
-        })
-        .catch(() => {
-          currentPrefs.innerHTML = "<em>error loading preferences.</em>";
-        });
-    });
-  }
+        // render a summary block below the buttons
+        const kw = prefs.keywords?.join(", ") || "(none)";
+        const au = prefs.authors?.join(", ") || "(none)";
+        const sc = prefs.min_score || 1.0;
+
+        currentPrefs.innerHTML = `
+          <div class="prefs-summary">
+            <strong>keywords:</strong> ${kw}<br>
+            <strong>authors:</strong> ${au}<br>
+            <strong>min score:</strong> ${sc}
+          </div>
+        `;
+      })
+      .catch(() => {
+        currentPrefs.innerHTML = "<em>error loading preferences.</em>";
+      });
+  });
+}
 
 
   // ===============================

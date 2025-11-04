@@ -1,8 +1,13 @@
-from flask import Blueprint, render_template, request, jsonify
+from flask import Blueprint, Flask, render_template, request, jsonify
 from flask_login import current_user
 from .models import db, User, Paper, UserPreference
+from shared.db import init_app
+
+app = Flask(__name__)
+init_app(app)
 
 frontend = Blueprint("frontend", __name__)
+
 
 # ----------------------------------------------------------
 # homepage
@@ -17,6 +22,7 @@ def index():
 # ----------------------------------------------------------
 @frontend.route("/subscribe", methods=["GET", "POST"])
 def subscribe():
+    """handles user subscription to the daily digest."""
     if request.method == "POST":
         if request.is_json:
             data = request.get_json(force=True)
@@ -25,16 +31,20 @@ def subscribe():
             email = request.form.get("email", "").strip().lower()
 
         if not email:
-            return jsonify({"status": "error", "message": "please enter a valid email."})
+            return jsonify({"status": "error", "message": "please enter a valid email."}), 400
 
-        existing = User.query.filter_by(email=email).first()
-        if existing:
-            return jsonify({"status": "info", "message": "you're already subscribed!"})
-
-        new_user = User(email=email)
-        db.session.add(new_user)
-        db.session.commit()
-        return jsonify({"status": "success", "message": "successfully subscribed! welcome to the daily digest."})
+        try:
+            existing = User.query.filter_by(email=email).first()
+            if existing:
+                return jsonify({"status": "info", "message": "already subscribed!"})
+            new_user = User(email=email)
+            db.session.add(new_user)
+            db.session.commit()
+            return jsonify({"status": "success", "message": "subscribed successfully!"})
+        except Exception as e:
+            print(f"[subscribe] error: {e}")
+            db.session.rollback()
+            return jsonify({"status": "error", "message": f"server error: {e}"}), 500
 
     return render_template("subscribe.html")
 
@@ -44,6 +54,7 @@ def subscribe():
 # ----------------------------------------------------------
 @frontend.route("/unsubscribe", methods=["GET", "POST"])
 def unsubscribe():
+    """removes a user from the digest mailing list."""
     if request.method == "POST":
         if request.is_json:
             data = request.get_json(force=True)
@@ -52,15 +63,21 @@ def unsubscribe():
             email = request.form.get("email", "").strip().lower()
 
         if not email:
-            return jsonify({"status": "error", "message": "please enter a valid email."})
+            return jsonify({"status": "error", "message": "please enter a valid email."}), 400
 
-        user = User.query.filter_by(email=email).first()
-        if not user:
-            return jsonify({"status": "info", "message": "email not found — you may already be unsubscribed."})
+        try:
+            user = User.query.filter_by(email=email).first()
+            if not user:
+                return jsonify({"status": "info", "message": "email not found — you may already be unsubscribed."})
 
-        db.session.delete(user)
-        db.session.commit()
-        return jsonify({"status": "success", "message": "you’ve been unsubscribed. farewell!"})
+            db.session.delete(user)
+            db.session.commit()
+            print(f"[unsubscribe] removed {email}")
+            return jsonify({"status": "success", "message": "you’ve been unsubscribed. farewell!"})
+        except Exception as e:
+            print(f"[unsubscribe] error: {e}")
+            db.session.rollback()
+            return jsonify({"status": "error", "message": "server error"}), 500
 
     return render_template("unsubscribe.html")
 

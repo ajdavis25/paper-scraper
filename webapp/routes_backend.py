@@ -1,42 +1,31 @@
+#!/usr/bin/env python3
+"""
+routes_backend.py — backend routes for astro-ph digest
+"""
+import os, sys
 from flask import Flask, render_template, request, jsonify
 from flask_cors import CORS
-from datetime import datetime
-from flask_login import LoginManager, login_user, logout_user, login_required
-import os, yaml, feedparser, urllib.parse
+from flask_login import LoginManager
 from dotenv import load_dotenv
 
-# load .env from project root
+# make project root importable
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "..", ".env"))
 
-from .models import db, User, Paper, UserPreference
-from .routes_frontend import frontend
-from ..mailer import send_email
+from shared.db import db, init_app
+from shared.mail import send_email
+from webapp.models import User
+from webapp.routes_frontend import frontend
 
-# ==========================================================
-# flask app initialization
-# ==========================================================
 app = Flask(__name__)
 CORS(app)
-
-# database configuration
-if os.name == "nt":  # windows local
-    db_path = os.path.join(os.path.dirname(__file__), "feedback.db")
-else:  # linux (vercel, render, etc.)
-    db_path = os.path.join("/tmp", "feedback.db")
-
-app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{db_path}"
-app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-app.config["SECRET_KEY"] = "supersecret"
-
-db.init_app(app)
-app.register_blueprint(frontend)
-
+init_app(app)
 with app.app_context():
     db.create_all()
+app.register_blueprint(frontend)
 
-# ==========================================================
-# flask login setup
-# ==========================================================
+# flask-login setup
 login_manager = LoginManager()
 login_manager.init_app(app)
 
@@ -44,324 +33,187 @@ login_manager.init_app(app)
 def load_user(user_id):
     return User.query.get(int(user_id))
 
+
 # ==========================================================
-# backend / api routes
+# home
 # ==========================================================
-
-# ----------------------------------------------------------
-# status / health check
-# ----------------------------------------------------------
-@app.route("/status")
-def status():
-    """health check endpoint for uptime and monitoring."""
-    return jsonify({"status": "ok", "message": "astro-ph digest backend is live!"})
+@app.route("/")
+def index():
+    return render_template("index.html")
 
 
-# ----------------------------------------------------------
-# login / logout (simple demo placeholder)
-# ----------------------------------------------------------
-@app.route("/login")
-def login():
-    """temporary login endpoint (auto logs in first user)."""
-    user = User.query.first()
-    if not user:
-        user = User(email="ajdavis25@gmail.com")
-        db.session.add(user)
-        db.session.commit()
-    login_user(user)
-    return jsonify({"status": "success", "message": f"logged in as {user.email}"})
-
-
-@app.route("/logout")
-@login_required
-def logout():
-    logout_user()
-    return jsonify({"status": "success", "message": "logged out"})
-
-
-# ----------------------------------------------------------
-# record like/dislike for papers
-# ----------------------------------------------------------
-@app.route("/like", methods=["POST"])
-def like():
-    data = request.get_json(force=True)
-    email = data.get("email")
-    arxiv_id = data.get("arxiv_id")
-    liked = data.get("liked", True)
-
-    if not email or not arxiv_id:
-        return jsonify({"error": "missing email or arxiv_id"}), 400
-
-    user = User.query.filter_by(email=email.lower()).first()
-    if not user:
-        user = User(email=email.lower())
-        db.session.add(user)
-        db.session.commit()
-
-    paper = Paper.query.filter_by(arxiv_id=arxiv_id).first()
-    if not paper:
-        paper = Paper(arxiv_id=arxiv_id, link=f"https://arxiv.org/abs/{arxiv_id}")
-        db.session.add(paper)
-        db.session.commit()
-
-    pref = UserPreference.query.filter_by(user_id=user.id, paper_id=paper.id).first()
-    if pref:
-        pref.liked = liked
-        pref.created_at = datetime.utcnow()
-    else:
-        pref = UserPreference(user_id=user.id, paper_id=paper.id, liked=liked)
-        db.session.add(pref)
-
-    db.session.commit()
-    return jsonify({"message": f"recorded {'like' if liked else 'dislike'} for {arxiv_id} by {email}"})
-
-
-# ----------------------------------------------------------
-# api: save / load preferences (yaml)
-# ----------------------------------------------------------
-@app.route("/api/preferences", methods=["POST"])
-def save_preferences():
-    data = request.get_json(force=True)
-    prefs_path = os.path.join(os.path.dirname(__file__), "user_prefs.yaml")
-
-    try:
-        with open(prefs_path, "w", encoding="utf-8") as f:
-            yaml.safe_dump(data, f, sort_keys=False)
-        print("[astro-ph bot] saved preferences:", data)
-        return jsonify({"message": "preferences saved successfully!"})
-    except Exception as e:
-        print(f"[astro-ph bot] error saving preferences: {e}")
-        return jsonify({"error": str(e)}), 500
-
-
-@app.route("/api/preferences", methods=["GET"])
-def get_preferences():
-    prefs_path = os.path.join(os.path.dirname(__file__), "user_prefs.yaml")
-
-    if not os.path.exists(prefs_path):
-        return jsonify({"exists": False})
-
-    try:
-        with open(prefs_path, "r", encoding="utf-8") as f:
-            data = yaml.safe_load(f) or {}
-        return jsonify({"exists": True, "data": data})
-    except Exception as e:
-        print(f"[astro-ph bot] error loading preferences: {e}")
-        return jsonify({"exists": False, "error": str(e)}), 500
-
-
-@app.route("/feedback")
-def feedback():
-    """return all feedback (db + text logs) as json or render the table."""
-    db_entries = []
-    text_entries = []
-
-    # 1. load from feedback.db
-    try:
-        prefs = UserPreference.query.order_by(UserPreference.created_at.desc()).limit(100).all()
-        for pref in prefs:
-            db_entries.append({
-                "email": pref.user.email,
-                "arxiv_id": pref.paper.arxiv_id,
-                "liked": "👍" if pref.liked else "👎",
-                "timestamp": pref.created_at.strftime("%Y-%m-%d %H:%M:%S"),
-                "source": "database"
-            })
-    except Exception as e:
-        print("[feedback] database read error:", e)
-
-    # 2. load from recommendation_feedback.txt
-    text_path = os.path.join(os.path.dirname(__file__), "recommendation_feedback.txt")
-    if os.path.exists(text_path):
-        with open(text_path, "r", encoding="utf-8") as f:
-            for line in f:
-                parts = line.strip().split("] ", 1)
-                if len(parts) == 2:
-                    timestamp = parts[0].strip("[")
-                    text_entries.append({
-                        "email": "anonymous@local",
-                        "arxiv_id": "(recommendation)",
-                        "liked": "👍" if "LIKE" in parts[1] else "👎",
-                        "timestamp": timestamp,
-                        "source": "log"
-                    })
-
-    # merge and sort
-    all_entries = sorted(
-        db_entries + text_entries,
-        key=lambda x: x["timestamp"],
-        reverse=True
-    )
-
-    # if request is ajax (from js), return json
-    if request.headers.get("Accept") == "application/json":
-        return jsonify(all_entries)
-
-    # otherwise render the html table
-    return render_template("feedback.html")
-
-
-# ----------------------------------------------------------
-# user feedback (json -> email + text log)
-# ----------------------------------------------------------
+# ==========================================================
+# send feedback (contact form)
+# ==========================================================
 @app.route("/send-feedback", methods=["GET", "POST"])
 def user_feedback():
-    """display feedback form (get) and handle feedback submission (post)."""
+    """receives user feedback and emails it to the bot address."""
     if request.method == "GET":
         return render_template("feedback_form.html")
 
-    # --- post: handle submission ---
-    data = request.get_json(force=True)
-    name = data.get("name", "anonymous")
-    email = data.get("email", "")
-    message = data.get("message", "")
-
-    if not message.strip():
-        return jsonify({"status": "error", "message": "message cannot be empty"}), 400
-
-    # save locally
-    log_path = os.path.join(os.path.dirname(__file__), "user_feedback.txt")
-    with open(log_path, "a", encoding="utf-8") as f:
-        f.write(f"[{datetime.utcnow()}] {name} <{email}>: {message}\n")
-
-    print(f"[astro-ph bot] feedback from {name}: {message}")
-
-    # send notification email (using your config + mailer.py)
+    import yaml
     try:
-        cfg_path = os.path.join(os.path.dirname(__file__), "..", "config.yaml")
+        data = request.get_json(force=True)
+    except Exception:
+        return jsonify({"error": "invalid json"}), 400
+
+    name = (data.get("name") or "anonymous").strip()
+    email = (data.get("email") or "anonymous@local").strip()
+    message = (data.get("message") or "").strip()
+    if not message:
+        return jsonify({"error": "message cannot be empty"}), 400
+
+    cfg_path = os.path.join(os.path.dirname(__file__), "..", "config.yaml")
+    try:
         with open(cfg_path, "r", encoding="utf-8") as f:
-            cfg = yaml.safe_load(f)
-
-        subject = f"[astro-ph feedback] new message from {name}"
-        text_body = f"from: {name} <{email}>\n\n{message}"
-        html_body = f"<p><strong>from:</strong> {name} &lt;{email}&gt;</p><p>{message}</p>"
-
-        send_email(
-            cfg,
-            subject,
-            text_body,
-            html_body,
-            to_override=[cfg["output"]["email"]["from_addr"]]  # force send feedback only to bot
-        )
-        print("[mailer] feedback notification sent")
-
-        return jsonify({"status": "success", "message": "thank you for your feedback!"})
-
+            cfg = yaml.safe_load(f) or {}
     except Exception as e:
-        print(f"[mailer] error sending feedback email: {e}")
-        return jsonify({"status": "error", "message": f"error sending feedback: {e}"})
+        print(f"[send-feedback] yaml error: {e}")
+        cfg = {}
 
+    subject = f"[astro-ph feedback] from {name}"
+    text = f"{name} <{email}> wrote:\n\n{message}"
+    html = f"<p><strong>{name}</strong> &lt;{email}&gt;</p><p>{message}</p>"
 
-# ----------------------------------------------------------
-# recommendations api (live arXiv fetch)
-# ----------------------------------------------------------
-@app.route("/recommendations")
-def recommendations():
-    """fetch related arXiv papers based on saved keywords."""
-    prefs_path = os.path.join(os.path.dirname(__file__), "user_prefs.yaml")
-    if not os.path.exists(prefs_path):
-        return render_template("recommendations.html", recs=[], message="no preferences found yet.")
+    if not send_email(cfg, subject, text, html):
+        print("[send-feedback] mail send failed")
+        return jsonify({"error": "mail failed"}), 500
 
-    with open(prefs_path, "r", encoding="utf-8") as f:
-        prefs = yaml.safe_load(f) or {}
-
-    keywords = prefs.get("keywords", [])
-    if not keywords:
-        return render_template("recommendations.html", recs=[], message="no keywords set in preferences.")
-
-    # build query safely with proper url encoding
-    encoded_terms = [urllib.parse.quote_plus(kw.strip()) for kw in keywords if kw.strip()]
-    query = " OR ".join([f"all:{term}" for term in encoded_terms])
-
-    params = {
-        "search_query": query,
-        "sortBy": "submittedDate",
-        "sortOrder": "descending",
-        "max_results": "5",
-    }
-
-    url = f"https://export.arxiv.org/api/query?{urllib.parse.urlencode(params)}"
-    print("[recommendations] fetching:", url)
-
-    try:
-        feed = feedparser.parse(url)
-        recs = [
-            {
-                "title": entry.title,
-                "link": entry.link,
-                "summary": entry.summary,
-                "published": entry.published,
-            }
-            for entry in feed.entries[:5]
-        ]
-    except Exception as e:
-        print("[recommendations] error:", e)
-        recs = []
-
-    message = (
-        "no new papers found matching your preferences."
-        if not recs
-        else f"showing {len(recs)} latest papers matching your interests."
-    )
-    return render_template("recommendations.html", recs=recs, message=message)
-
-
-# ----------------------------------------------------------
-# recommendation feedback api
-# ----------------------------------------------------------
-@app.route("/api/recommendation-feedback", methods=["POST"])
-def recommendation_feedback():
-    """record like/dislike feedback for recommended papers."""
-    data = request.get_json(force=True)
-    title = data.get("title")
-    reaction = data.get("reaction")
-    link = data.get("link")
-
-    if not title or reaction not in ["like", "dislike"]:
-        return jsonify({"error": "invalid input"}), 400
-
-    liked = (reaction == "like")
-
-    # extract arXiv id cleanly
-    arxiv_id = None
-    if link and "arxiv.org/abs/" in link:
-        arxiv_id = link.split("arxiv.org/abs/")[-1].strip()
-    elif link and "arxiv.org/pdf/" in link:
-        arxiv_id = link.split("arxiv.org/pdf/")[-1].split(".pdf")[0]
-    else:
-        arxiv_id = "(unknown)"
-
-    # ensure anonymous user exists
-    user = User.query.filter_by(email="anonymous@local").first()
-    if not user:
-        user = User(email="anonymous@local")
-        db.session.add(user)
-        db.session.commit()
-
-    # create or update paper entry
-    paper = Paper.query.filter_by(arxiv_id=arxiv_id).first()
-    if not paper:
-        paper = Paper(arxiv_id=arxiv_id, link=link or "#")
-        db.session.add(paper)
-        db.session.commit()
-
-    # record preference
-    pref = UserPreference.query.filter_by(user_id=user.id, paper_id=paper.id).first()
-    if pref:
-        pref.liked = liked
-        pref.created_at = datetime.utcnow()
-    else:
-        pref = UserPreference(user_id=user.id, paper_id=paper.id, liked=liked)
-        db.session.add(pref)
-
-    db.session.commit()
-
-    print(f"[recommendation-feedback] {reaction} recorded for '{title}' — {link}")
-    return jsonify({"message": f"recorded {reaction} for {title} (database only)"})
+    print(f"[send-feedback] feedback email sent from {email}")
+    return jsonify({"message": "feedback sent!"})
 
 
 # ==========================================================
-# run locally
+# recommendations page
+# ==========================================================
+@app.route("/recommendations")
+def recommendations():
+    """render recommendations using saved keywords."""
+    import yaml
+    from shared.utils import build_arxiv_query, fetch_arxiv_feed
+
+    prefs_path = os.path.join(os.path.dirname(__file__), "user_prefs.yaml")
+    try:
+        with open(prefs_path, "r", encoding="utf-8") as f:
+            prefs = yaml.safe_load(f) or {}
+    except Exception as e:
+        print(f"[recommendations] error reading prefs: {e}")
+        prefs = {}
+
+    keywords = prefs.get("keywords") or []
+    if not keywords:
+        return render_template("recommendations.html", recs=[], message="no keywords found in preferences.")
+
+    url = build_arxiv_query(keywords, max_results=5)
+    print(f"[recommendations] fetching: {url}")
+
+    try:
+        recs = fetch_arxiv_feed(url)
+        msg = f"showing {len(recs)} recent papers matching your interests."
+    except Exception as e:
+        print(f"[recommendations] error fetching arxiv: {e}")
+        recs, msg = [], "error fetching arXiv feed."
+
+    return render_template("recommendations.html", recs=recs, message=msg)
+
+
+# ==========================================================
+# record recommendation feedback (like/dislike)
+# ==========================================================
+@app.route("/api/recommendation-feedback", methods=["POST"])
+def recommendation_feedback():
+    """store user reaction to a recommendation."""
+    import json, time
+    data = request.get_json(force=True)
+    link = data.get("link", "").strip()
+    # normalize: remove arxiv.org prefix if present
+    if "arxiv.org" in link:
+        link = link.split("arxiv.org/abs/")[-1].strip("/")
+    record = {
+        "email": "anonymous",
+        "arxiv_id": link,
+        "liked": data.get("reaction"),
+        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime()),
+        "source": "recommendations"
+    }
+
+    feedback_path = os.path.join(os.path.dirname(__file__), "feedback.json")
+    try:
+        # append to existing list
+        if os.path.exists(feedback_path):
+            with open(feedback_path, "r", encoding="utf-8") as f:
+                entries = json.load(f)
+        else:
+            entries = []
+        entries.insert(0, record)
+        with open(feedback_path, "w", encoding="utf-8") as f:
+            json.dump(entries, f, indent=2)
+    except Exception as e:
+        print(f"[recommendation-feedback] error saving feedback: {e}")
+
+    return jsonify({"status": "ok"})
+
+
+# ==========================================================
+# user preferences api (for dashboard)
+# ==========================================================
+@app.route("/api/preferences", methods=["GET", "POST"])
+def api_preferences():
+    """get or save user preferences."""
+    import yaml
+    prefs_path = os.path.join(os.path.dirname(__file__), "user_prefs.yaml")
+
+    if request.method == "GET":
+        try:
+            with open(prefs_path, "r", encoding="utf-8") as f:
+                prefs = yaml.safe_load(f) or {}
+            return jsonify(prefs)
+        except Exception as e:
+            print(f"[api/preferences] error loading prefs: {e}")
+            return jsonify({})
+    else:
+        data = request.get_json(force=True)
+        try:
+            with open(prefs_path, "w", encoding="utf-8") as f:
+                yaml.safe_dump(data, f, sort_keys=False)
+            print("[api/preferences] preferences saved:", data)
+            return jsonify({"status": "ok"})
+        except Exception as e:
+            print(f"[api/preferences] error saving prefs: {e}")
+            return jsonify({"error": str(e)}), 500
+
+
+# ==========================================================
+# feedback viewer (admin)
+# ==========================================================
+@app.route("/feedback", methods=["GET"])
+def feedback_entries():
+    """
+    return recent like/dislike feedback as json for the user feedback table.
+    works even if database missing — will fall back to empty list.
+    """
+    try:
+        # if you’re using a db:
+        # entries = Feedback.query.order_by(Feedback.timestamp.desc()).limit(100).all()
+        # data = [e.as_dict() for e in entries]
+
+        # fallback: check for local feedback.json file
+        import json, os
+        feedback_path = os.path.join(os.path.dirname(__file__), "feedback.json")
+        if os.path.exists(feedback_path):
+            with open(feedback_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        else:
+            data = []
+
+        return jsonify(data)
+    except Exception as e:
+        print(f"[feedback] error loading entries: {e}")
+        return jsonify([])
+
+
+# ==========================================================
+# main entry (for local run)
 # ==========================================================
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)

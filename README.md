@@ -30,18 +30,45 @@ it includes:
 ### REPO STRUCTURE
 ```text
 astroph-bot/
-├─ bot.py                   # main digest script
-├─ filters.py               # keyword + author filtering
-├─ mailer.py                # email sending logic
-├─ parsers.py               # arXiv feed parsing
-├─ scripts/
-│ ├─ subscribe_bot.py       # handles "subscribe" emails
-│ └─ unsubscribe_bot.py     # handles "unsubscribe" emails
-├─ defaults.yaml            # default keywords for new users
-├─ requirements.txt
-├─ .github/workflows/
-│ └─ daily_digest.yml       # daily automation (8am CT)
-└─ webapp/                  # optional flask frontend
+├── .env                             # environment variables (api keys, credentials, gmail app password, etc.)
+├── .github/workflows/               # github actions for automation
+│   ├── check_subscriptions.yml      # validates and cleans up subscriber list on schedule
+│   └── daily_digest.yml             # runs the daily paper curation + email digest pipeline
+├── assets/                          # branding and static assets (banner.png, icons, etc.)
+├── bot.py                           # main entrypoint for running the daily astro-ph digest bot
+├── config.yaml                      # central configuration (arXiv filters, smtp settings, output options)
+├── curator.py                       # handles paper ranking, keyword filtering, and relevance scoring
+├── database.db                      # sqlite database used by the web dashboard and feedback tracker
+├── filters.py                       # keyword filters and paper scoring logic
+├── mailer.py                        # shared email sending helper used by both bot and web app
+├── shared/                          # cross-module utilities shared between bot and flask webapp
+│   ├── mail.py                      # email helpers (smtp, html/plaintext formatting)
+│   ├── utils.py                     # general helper functions (yaml io, arXiv query builders, etc.)
+│   └── db.py                        # lightweight database connector for user feedback
+├── scripts/                         # command-line tools for direct subscription control
+│   ├── subscribe_bot.py             # adds new users to the mailing list
+│   └── unsubscribe_bot.py           # removes users from the mailing list
+├── webapp/                          # flask front-end + backend for user interaction
+│   ├── routes_frontend.py           # user-facing pages (dashboard, preferences, feedback, etc.)
+│   ├── routes_backend.py            # api routes for preferences, recommendations, and feedback
+│   ├── templates/                   # html templates (jinja2) for all web views
+│   ├── static/                      # front-end assets served by flask
+│   │   ├── css/style.css            # main site stylesheet
+│   │   ├── js/                      # javascript modules for interactive pages
+│   │   │   ├── dashboard.js         # manages preferences + feedback form submission
+│   │   │   ├── recommendations.js   # handles like/dislike actions on recommended papers
+│   │   │   └── subscriptions.js     # handles subscribe/unsubscribe ui
+│   │   └── img/                     # local images (banner, icons)
+│   ├── feedback.db                  # stores like/dislike history and user feedback
+│   ├── user_feedback.txt            # plaintext fallback log for feedback (optional)
+│   └── user_prefs.yaml              # stores each user's saved preferences (keywords, authors, etc.)
+├── notebooks/                       # dev notes or experimental analysis in jupyter
+├── secrets/                         # oauth tokens and gmail credentials (never commit these!)
+│   ├── credentials.json
+│   └── token.json
+├── tests/                           # unit tests and verification scripts
+├── vercel.json                      # deployment configuration for vercel hosting
+└── README.md                        # this documentation file
 ```
 
 ---
