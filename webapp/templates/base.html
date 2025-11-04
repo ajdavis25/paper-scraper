@@ -18,7 +18,7 @@
       {% else %}
         <a href="/dashboard">dashboard</a>
       {% endif %}
-      
+
       <a href="/preferences">preferences</a>
       <a href="/recommendations">recommendations</a>
       <a href="/view-feedback">user feedback</a>
@@ -35,5 +35,6 @@
   </footer>
 
   <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+    {% block scripts %}{% endblock %}
 </body>
 </html>

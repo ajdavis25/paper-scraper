@@ -1,7 +1,7 @@
-from flask import Flask, render_template, request, jsonify, redirect, url_for
+from flask import Flask, render_template, request, jsonify, redirect, url_for, flash
 from flask_cors import CORS
 from datetime import datetime
-from flask_login import LoginManager, UserMixin, login_user, logout_user, current_user, login_required
+from flask_login import LoginManager, login_user, logout_user, current_user, login_required
 import os, yaml, feedparser, urllib.parse
 
 from .models import db, User, Paper, UserPreference
@@ -47,8 +47,9 @@ def load_user(user_id):
 # homepage
 # ----------------------------------------------------------
 @app.route("/")
-def index():
-    return render_template("index.html", user=current_user)
+def home():
+    return "astro-ph digest backend is live!"
+
 
 # ----------------------------------------------------------
 # login/logout
@@ -270,9 +271,8 @@ def dashboard(email):
 
 
 # ----------------------------------------------------------
-# recommend (placeholder)
+# recommendations
 # ----------------------------------------------------------
-
 @app.route("/recommendations")
 def recommendations():
     """fetch related arXiv papers based on user preferences."""

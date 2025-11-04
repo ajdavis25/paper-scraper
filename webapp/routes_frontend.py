@@ -1,56 +1,65 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash
-import os, yaml
+from flask import Blueprint, render_template, request, jsonify
+from flask_login import current_user
+from .models import db, User
 
-frontend = Blueprint("frontend", __name__, template_folder="templates")
+frontend = Blueprint("frontend", __name__)
 
-CONFIG_PATH = os.path.join(os.path.dirname(__file__), "../astroph-bot/config.yaml")
-
-
+# ----------------------------------------------------------
+# homepage
+# ----------------------------------------------------------
 @frontend.route("/")
 def index():
-    return render_template("index.html")
+    return render_template("index.html", user=current_user)
 
 
+# ----------------------------------------------------------
+# subscribe
+# ----------------------------------------------------------
 @frontend.route("/subscribe", methods=["GET", "POST"])
 def subscribe():
     if request.method == "POST":
-        email = request.form.get("email")
-        if not email:
-            flash("please enter an email.", "error")
-            return redirect(url_for("frontend.index"))
-
-        with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-            cfg = yaml.safe_load(f)
-        to_addrs = cfg["output"]["email"]["to_addrs"]
-
-        if email not in to_addrs:
-            to_addrs.append(email)
-            with open(CONFIG_PATH, "w", encoding="utf-8") as f:
-                yaml.safe_dump(cfg, f)
-            flash("subscribed successfully!", "success")
+        if request.is_json:
+            data = request.get_json(force=True)
+            email = data.get("email", "").strip().lower()
         else:
-            flash("you're already subscribed.", "info")
+            email = request.form.get("email", "").strip().lower()
 
-        return redirect(url_for("frontend.index"))
+        if not email:
+            return jsonify({"status": "error", "message": "please enter a valid email."})
+
+        existing = User.query.filter_by(email=email).first()
+        if existing:
+            return jsonify({"status": "info", "message": "you're already subscribed!"})
+
+        new_user = User(email=email)
+        db.session.add(new_user)
+        db.session.commit()
+        return jsonify({"status": "success", "message": "successfully subscribed! welcome to the daily digest."})
+
     return render_template("subscribe.html")
 
 
+# ----------------------------------------------------------
+# unsubscribe
+# ----------------------------------------------------------
 @frontend.route("/unsubscribe", methods=["GET", "POST"])
 def unsubscribe():
     if request.method == "POST":
-        email = request.form.get("email")
-
-        with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-            cfg = yaml.safe_load(f)
-        to_addrs = cfg["output"]["email"]["to_addrs"]
-
-        if email in to_addrs:
-            to_addrs.remove(email)
-            with open(CONFIG_PATH, "w", encoding="utf-8") as f:
-                yaml.safe_dump(cfg, f)
-            flash("unsubscribed successfully.", "success")
+        if request.is_json:
+            data = request.get_json(force=True)
+            email = data.get("email", "").strip().lower()
         else:
-            flash("email not found in the list.", "error")
+            email = request.form.get("email", "").strip().lower()
 
-        return redirect(url_for("frontend.index"))
+        if not email:
+            return jsonify({"status": "error", "message": "please enter a valid email."})
+
+        user = User.query.filter_by(email=email).first()
+        if not user:
+            return jsonify({"status": "info", "message": "email not found — you may already be unsubscribed."})
+
+        db.session.delete(user)
+        db.session.commit()
+        return jsonify({"status": "success", "message": "you’ve been unsubscribed. farewell!"})
+
     return render_template("unsubscribe.html")

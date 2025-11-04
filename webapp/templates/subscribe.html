@@ -2,7 +2,21 @@
 {% block title %}subscribe — astro-ph digest{% endblock %}
 
 {% block content %}
-  <h2>subscribe</h2>
-  <p>join the daily digest! send an email to <strong>arxivastrophbot@gmail.com</strong>
-  with the subject line <code>subscribe</code>, or use this placeholder form below (coming soon).</p>
+  <section class="subscribe-section">
+    <h2>subscribe</h2>
+    <p>
+      join the daily digest! enter your email below to subscribe, or send an email to
+      <strong>arxivastrophbot@gmail.com</strong> with the subject line
+      <code>subscribe</code>.
+    </p>
+
+    <form id="subscribe-form" method="POST" novalidate>
+      <input type="email" name="email" placeholder="your email" required class="input-field">
+      <button type="submit" class="btn">subscribe</button>
+    </form>
+  </section>
+{% endblock %}
+
+{% block scripts %}
+  <script src="{{ url_for('static', filename='js/subscriptions.js') }}"></script>
 {% endblock %}

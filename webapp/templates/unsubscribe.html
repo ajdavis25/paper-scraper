@@ -2,7 +2,17 @@
 {% block title %}unsubscribe — astro-ph digest{% endblock %}
 
 {% block content %}
-  <h2>unsubscribe</h2>
-  <p>to stop receiving the digest, send an email with the subject <code>unsubscribe</code>.<br>
-  you’ll receive a farewell message confirming removal from the mailing list.</p>
+  <section class="unsubscribe-section">
+    <h2>unsubscribe</h2>
+    <p>enter your email below to stop receiving the daily digest.</p>
+
+    <form id="unsubscribe-form" method="POST" novalidate>
+      <input type="email" name="email" placeholder="your email" required class="input-field">
+      <button type="submit" class="btn btn-secondary">unsubscribe</button>
+    </form>
+  </section>
+{% endblock %}
+
+{% block scripts %}
+  <script src="{{ url_for('static', filename='js/subscriptions.js') }}"></script>
 {% endblock %}

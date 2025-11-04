@@ -6,7 +6,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
   // ===============================
-  // FEEDBACK FORM HANDLER
+  // feedback form submission
   // ===============================
   const feedbackForm = document.getElementById("feedback-form");
   const feedbackStatus = document.getElementById("feedback-status");
@@ -53,7 +53,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
   // ===============================
-  // HELPER: FADE-IN MESSAGE
+  // helper: fade in message
   // ===============================
   const showMessage = (msg, color = "green") => {
     if (!status) return;
@@ -70,7 +70,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
   // ===============================
-  // VIEW CURRENT PREFS
+  // view current prefs
   // ===============================
   const viewBtn = document.getElementById("view-current");
   const currentPrefs = document.getElementById("current-prefs");
@@ -105,7 +105,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
   // ===============================
-  // LOAD SAVED PREFS ON PAGE LOAD
+  // load saved prefs on page load
   // ===============================
   if (form) {
     fetch("/api/preferences")
@@ -126,7 +126,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
     // ===============================
-    // SAVE PREFS SUBMISSION
+    // save prefs submission
     // ===============================
     form.addEventListener("submit", (e) => {
       e.preventDefault();
@@ -164,7 +164,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
 // ===============================
-// FEEDBACK PAGE TABLE LOADER
+// feedback page table loader
 // ===============================
 const feedbackTable = document.getElementById("feedback-table");
 if (feedbackTable) {
@@ -190,7 +190,7 @@ if (feedbackTable) {
 
 
 // ===============================
-// NAVBAR DASHBOARD LINK HANDLER
+// navbar dashboard link handler
 // ===============================
 document.addEventListener("DOMContentLoaded", () => {
   const dashLink = document.querySelector("#dashboard-link");
