@@ -1,7 +1,8 @@
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, redirect, url_for
 from flask_cors import CORS
 from datetime import datetime
-import os, yaml
+from flask_login import LoginManager, UserMixin, login_user, logout_user, current_user, login_required
+import os, yaml, feedparser, urllib.parse
 
 from .models import db, User, Paper, UserPreference
 from .routes_frontend import frontend
@@ -28,13 +29,48 @@ app.register_blueprint(frontend)
 with app.app_context():
     db.create_all()
 
+login_manager = LoginManager()
+login_manager.init_app(app)
+
+# user loader (required)
+@login_manager.user_loader
+def load_user(user_id):
+    return User.query.get(int(user_id))
+
+
 # ==========================================================
 # routes
 # ==========================================================
 
+
+# ----------------------------------------------------------
+# homepage
+# ----------------------------------------------------------
 @app.route("/")
-def home():
-    return "astro-ph digest backend is live!"
+def index():
+    return render_template("index.html", user=current_user)
+
+# ----------------------------------------------------------
+# login/logout
+# ----------------------------------------------------------
+@app.route("/login")
+def login():
+    # demo: log in the first user in the db or create one
+    user = User.query.first()
+    if not user:
+        user = User(email="ajdavis25@gmail.com")
+        db.session.add(user)
+        db.session.commit()
+
+    login_user(user)
+    return redirect(url_for("index"))
+
+
+@app.route("/logout")
+@login_required
+def logout():
+    logout_user()
+    return redirect(url_for("index"))
 
 
 # ----------------------------------------------------------
@@ -191,6 +227,16 @@ def user_feedback():
 # ----------------------------------------------------------
 # dashboard (shows all liked papers for a given email)
 # ----------------------------------------------------------
+@app.route("/dashboard")
+def dashboard_no_email():
+    return render_template(
+        "dashboard.html",
+        user={"email": "unknown"},
+        prefs=[],
+        message="no email provided — please log in or subscribe first."
+    )
+
+
 @app.route("/dashboard/<email>")
 def dashboard(email):
     user = User.query.filter_by(email=email.lower()).first()
@@ -226,12 +272,52 @@ def dashboard(email):
 # ----------------------------------------------------------
 # recommend (placeholder)
 # ----------------------------------------------------------
-@app.route("/recommend")
-def recommend():
-    email = request.args.get("email")
-    if not email:
-        return jsonify({"error": "missing email"}), 400
-    return jsonify({"message": f"recommendations for {email} coming soon!"})
+
+@app.route("/recommendations")
+def recommendations():
+    """fetch related arXiv papers based on user preferences."""
+    prefs_path = os.path.join(os.path.dirname(__file__), "user_prefs.yaml")
+    if not os.path.exists(prefs_path):
+        return render_template("recommendations.html", recs=[], message="no preferences found yet.")
+
+    with open(prefs_path, "r", encoding="utf-8") as f:
+        prefs = yaml.safe_load(f) or {}
+
+    keywords = prefs.get("keywords", [])
+    if not keywords:
+        return render_template("recommendations.html", recs=[], message="no keywords set in preferences.")
+
+    # build simple query
+    query = " OR ".join([f"all:{kw}" for kw in keywords])
+    base = "https://export.arxiv.org/api/query"
+    params = {
+        "search_query": query,
+        "sortBy": "submittedDate",
+        "sortOrder": "descending",
+        "max_results": "10"
+    }
+    url = f"{base}?{urllib.parse.urlencode(params)}"
+
+    try:
+        feed = feedparser.parse(url)
+        recs = []
+        for entry in feed.entries[:10]:
+            recs.append({
+                "title": entry.title,
+                "link": entry.link,
+                "summary": entry.summary[:400] + "...",
+                "published": entry.published,
+            })
+    except Exception as e:
+        print("[recommendations] error:", e)
+        recs = []
+
+    if not recs:
+        message = "no new papers found matching your preferences."
+    else:
+        message = f"showing {len(recs)} latest papers matching your interests."
+
+    return render_template("recommendations.html", recs=recs, message=message)
 
 
 # ==========================================================

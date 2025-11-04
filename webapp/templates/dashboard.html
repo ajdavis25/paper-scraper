@@ -2,7 +2,12 @@
 {% block title %}dashboard — astro-ph digest{% endblock %}
 
 {% block content %}
-  <h2>liked papers for {{ user.email }}</h2>
+  <h2>liked papers for {{ user.email or 'unknown' }}</h2>
+
+  <p style="margin-bottom: 1em;">
+    <a class="btn" href="/subscribe">subscribe</a>
+    <a class="btn btn-secondary" href="/unsubscribe">unsubscribe</a>
+  </p>
 
   {% if message %}
     <p><em>{{ message }}</em></p>

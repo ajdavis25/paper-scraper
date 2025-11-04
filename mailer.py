@@ -28,32 +28,26 @@ def send_email(cfg, subject, text_body, html_body, to_override=None):
     """
     em = cfg["output"]["email"]
 
-    # determine recipients
-    to_addrs = to_override or em.get("to_addrs", [])
-    if not to_addrs:
-        raise ValueError("no recipients specified.")
-
-    # build MIME message
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = subject
-    msg["From"] = em["from_addr"]
-    msg["To"] = ", ".join(to_addrs)
-    msg.attach(MIMEText(text_body, "plain", "utf-8"))
-    msg.attach(MIMEText(html_body, "html", "utf-8"))
-
-    # load password securely
-    pw_env = em.get("password_env", "EMAIL_PASS")
-    password = os.getenv(pw_env, "")
+    # load password
+    password = os.getenv(em.get("password_env", "EMAIL_PASS"), "")
     if not password:
-        raise RuntimeError(f"missing password in environment variable: {pw_env}")
+        raise RuntimeError(
+            f"missing password in environment variable: {em.get('password_env', 'EMAIL_PASS')}"
+        )
 
-    # connect and send
-    try:
-        with smtplib.SMTP(em["smtp_host"], em["smtp_port"], timeout=20) as s:
-            if em.get("use_starttls", True):
-                s.starttls()
-            s.login(em["username"], password)
-            s.sendmail(em["from_addr"], to_addrs, msg.as_string())
-            print(f"[mailer] email sent to {', '.join(to_addrs)}")
-    except Exception as e:
-        print(f"[mailer] ERROR sending to {', '.join(to_addrs)}: {e}")
+    # build smtp connection once
+    with smtplib.SMTP(em["smtp_host"], em["smtp_port"]) as s:
+        if em.get("use_starttls", True):
+            s.starttls()
+        s.login(em["username"], password)
+
+        for addr in em["to_addrs"]:
+            msg = MIMEMultipart("alternative")
+            msg["subject"] = subject
+            msg["from"] = em["from_addr"]
+            msg["to"] = addr  # only this user
+            msg.attach(MIMEText(text_body, "plain", "utf-8"))
+            msg.attach(MIMEText(html_body, "html", "utf-8"))
+
+            s.sendmail(em["from_addr"], addr, msg.as_string())
+            print(f"[mailer] sent digest to {addr}")

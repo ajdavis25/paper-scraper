@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}recommendations — astro-ph digest{% endblock %}
+
+{% block content %}
+<div class="prefs-container">
+  <h2>recommended papers</h2>
+  <p><em>{{ message }}</em></p>
+
+  {% if recs %}
+  <ul class="paper-list">
+    {% for r in recs %}
+    <li>
+      <a href="{{ r.link }}" target="_blank">{{ r.title }}</a><br>
+      <small>{{ r.published }}</small><br>
+      <p>{{ r.summary }}</p>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</div>
+{% endblock %}

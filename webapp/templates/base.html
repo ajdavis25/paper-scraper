@@ -12,9 +12,16 @@
     <nav>
       <a href="/subscribe">subscribe</a>
       <a href="/unsubscribe">unsubscribe</a>
-      <a href="/dashboard/ajdavis25@gmail.com">dashboard</a>
+
+      {% if user and user.email %}
+        <a href="/dashboard/{{ user.email }}">dashboard</a>
+      {% else %}
+        <a href="/dashboard">dashboard</a>
+      {% endif %}
+      
       <a href="/preferences">preferences</a>
-      <a href="/view-feedback">feedback</a>
+      <a href="/recommendations">recommendations</a>
+      <a href="/view-feedback">user feedback</a>
       <a href="/send-feedback">send feedback</a>
     </nav>
   </header>

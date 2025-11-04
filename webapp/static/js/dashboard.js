@@ -4,6 +4,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const form = document.getElementById("prefs-form");
   const status = document.getElementById("save-status");
 
+
   // ===============================
   // FEEDBACK FORM HANDLER
   // ===============================
@@ -50,6 +51,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+
   // ===============================
   // HELPER: FADE-IN MESSAGE
   // ===============================
@@ -65,6 +67,7 @@ document.addEventListener("DOMContentLoaded", () => {
       status.style.opacity = 0;
     }, 3000);
   };
+
 
   // ===============================
   // VIEW CURRENT PREFS
@@ -100,6 +103,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+
   // ===============================
   // LOAD SAVED PREFS ON PAGE LOAD
   // ===============================
@@ -119,6 +123,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       })
       .catch(() => console.log("no saved prefs found."));
+
 
     // ===============================
     // SAVE PREFS SUBMISSION
@@ -157,6 +162,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 });
 
+
 // ===============================
 // FEEDBACK PAGE TABLE LOADER
 // ===============================
@@ -181,3 +187,28 @@ if (feedbackTable) {
       feedbackTable.outerHTML = "<p><em>no feedback found.</em></p>";
     });
 }
+
+
+// ===============================
+// NAVBAR DASHBOARD LINK HANDLER
+// ===============================
+document.addEventListener("DOMContentLoaded", () => {
+  const dashLink = document.querySelector("#dashboard-link");
+  if (!dashLink) return;
+
+  // try localStorage
+  const savedEmail = localStorage.getItem("astro_email");
+  if (savedEmail) {
+    dashLink.href = `/dashboard/${savedEmail}`;
+  }
+
+  // if the user saves prefs, also store their email
+  const emailField = document.getElementById("email");
+  if (emailField) {
+    emailField.addEventListener("change", () => {
+      if (emailField.value.trim()) {
+        localStorage.setItem("astro_email", emailField.value.trim());
+      }
+    });
+  }
+});
