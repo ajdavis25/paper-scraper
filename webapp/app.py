@@ -1,8 +1,9 @@
-from flask import Flask, request, jsonify
+from flask import Flask, render_template, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
-import os, json
+import os
 from datetime import datetime
+from routes_frontend import frontend
 
 app = Flask(__name__)
 CORS(app)
@@ -17,6 +18,7 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 db = SQLAlchemy(app)
 
+app.register_blueprint(frontend)
 
 # database model
 class Feedback(db.Model):
@@ -111,6 +113,17 @@ def view_feedback():
         "count": len(results),
         "feedback": results
     })
+
+
+@app.route("/dashboard/<email>")
+def dashboard(email):
+    feedback_entries = Feedback.query.filter_by(email=email, liked=True).order_by(Feedback.timestamp.desc()).all()
+    prefs = [
+        {"paper": {"title": f"arXiv:{entry.arxiv_id}", "link": f"https://arxiv.org/abs/{entry.arxiv_id}", "arxiv_id": entry.arxiv_id}}
+        for entry in feedback_entries
+    ]
+    user = {"email": email}
+    return render_template("dashboard.html", user=user, prefs=prefs)
 
 
 # run locally
