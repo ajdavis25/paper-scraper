@@ -1,0 +1,29 @@
+# python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# environment / local configs
+.env
+venv/
+*.db
+*.sqlite
+*.log
+*.yaml
+user_prefs.yaml
+user_feedback.txt
+config.yaml
+config.example.yaml
+feedback.json
+
+# ide / jupyter / system files
+.ipynb_checkpoints/
+*.ipynb
+.vscode/
+.DS_Store
+Thumbs.db
+secrets/credentials.json
+secrets/token.json
+.vercel
+astroph-bot/scratch/*.py

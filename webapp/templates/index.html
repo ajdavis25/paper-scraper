@@ -1,0 +1,19 @@
+{% extends "base.html" %} {% block title %}home — astro-ph digest{% endblock %}
+{% block content %}
+<section>
+  <h2>welcome!</h2>
+  <p>
+    the <strong>astro-ph digest</strong> delivers a daily, curated selection of
+    astrophysics papers from
+    <a href="https://arxiv.org/list/astro-ph/new" target="_blank">arXiv</a>,
+    filtered by relevance and sent every morning around 8 am cst.
+  </p>
+  <div style="margin-top: 1.5em">
+    <a class="btn" href="/subscribe">subscribe</a>
+    <a class="btn btn-secondary" href="/unsubscribe">unsubscribe</a>
+    <button class="btn" onclick="window.location.href='/dashboard'">
+      dashboard
+    </button>
+  </div>
+</section>
+{% endblock %}

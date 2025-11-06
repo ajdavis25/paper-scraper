@@ -1,0 +1,31 @@
+{% extends "base.html" %} {% block title %}info{% endblock %} {% block content
+%}
+<section class="info-page">
+  <h2>what is astro-ph digest?</h2>
+  <p>
+    astro-ph digest helps you track new arXiv papers that match the topics you
+    care about. subscribe with any email, set your keywords, and we will send a
+    daily summary so you never miss a paper.
+  </p>
+
+  <h3>sample digest</h3>
+  <p>here is one of the example digests we send:</p>
+  <ul class="sample-digest">
+    {% for item in sample_digest %}
+    <li>
+      <strong>{{ item.title }}</strong>
+      <small>({{ item.category }})</small> &mdash; {{ item.summary }}
+    </li>
+    {% endfor %}
+  </ul>
+
+  <h3>get started</h3>
+  <ol>
+    <li>create an account or just subscribe with your email.</li>
+    <li>users can add keywords, authors, and categories from the dashboard.</li>
+    <li>
+      check your inbox for the daily digest and like the papers you enjoy.
+    </li>
+  </ol>
+</section>
+{% endblock %}

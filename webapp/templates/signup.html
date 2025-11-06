@@ -1,0 +1,20 @@
+{% extends "base.html" %} {% block title %}sign up{% endblock %} {% block
+content %}
+<div class="form-box">
+  <h2 class="form-title">sign up</h2>
+
+  <form method="POST">
+    <label for="email">email</label>
+    <input type="text" id="email" name="email" required />
+
+    <label for="password">password</label>
+    <input type="password" id="password" name="password" required />
+
+    <button type="submit" class="submit-btn">create account</button>
+  </form>
+
+  <p class="signup-text">
+    already have an account? <a href="{{ url_for('frontend.login') }}">login</a>
+  </p>
+</div>
+{% endblock %}

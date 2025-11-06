@@ -1,0 +1,46 @@
+{% extends "base.html" %} {% block title %}recommendations — astro-ph digest{%
+endblock %} {% block content %}
+<h2>recommended papers</h2>
+<p>{{ message }}</p>
+
+{% if recs %} {% for rec in recs %}
+<div
+  class="paper"
+  id="paper-{{ loop.index }}"
+  data-title="{{ rec.title|e }}"
+  data-link="{{ rec.link|e }}"
+>
+  <h3>
+    <a href="{{ rec.link }}" target="_blank" class="title">{{ rec.title }}</a>
+  </h3>
+
+  <div class="meta">
+    {% if rec.category %}
+    <span class="category-tag">{{ rec.category }}</span>
+    {% endif %} {% if rec.score is defined %}
+    <span class="score-tag">score: {{ rec.score }}</span>
+    {% endif %}
+    <span class="date">{{ rec.published }}</span>
+  </div>
+
+  <p class="summary">{{ rec.summary }}</p>
+
+  <div class="feedback-buttons">
+    <button class="btn btn-light like-btn">👍 like</button>
+    <button class="btn btn-light dislike-btn">👎 dislike</button>
+  </div>
+</div>
+{% endfor %} {% else %}
+<p><em>no recommendations found.</em></p>
+{% endif %} {% endblock %} {% block scripts %}
+
+<!-- expose the current logged-in user's email to js -->
+<script>
+  window.CURRENT_USER_EMAIL =
+    "{{ current_user.email if current_user.is_authenticated else '' }}";
+  console.log("CURRENT_USER_EMAIL =", window.CURRENT_USER_EMAIL || "(none)");
+</script>
+
+<!-- load your js after setting the variable -->
+<script src="{{ url_for('static', filename='js/recommendations.js') }}"></script>
+{% endblock %}

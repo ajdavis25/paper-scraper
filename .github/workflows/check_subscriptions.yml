@@ -1,0 +1,101 @@
+name: Check astro-ph subscriptions (every 15 min)
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"  # every 15 minutes
+  workflow_dispatch:
+
+jobs:
+  check-subs:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          set -e
+          if [ -f "./requirements.txt" ]; then
+            pip install -r ./requirements.txt
+          else
+            echo "requirements.txt not found"; exit 1
+          fi
+          sudo apt-get update -y && sudo apt-get install -y jq
+
+      - name: Write Gmail credentials and token
+        env:
+          GMAIL_CREDENTIALS_B64: ${{ secrets.GMAIL_CREDENTIALS_B64 }}
+          GMAIL_TOKEN_B64: ${{ secrets.GMAIL_TOKEN_B64 }}
+        run: |
+          set -e
+          mkdir -p ./secrets
+          echo "$GMAIL_CREDENTIALS_B64" | base64 --decode > ./secrets/credentials.json
+          echo "$GMAIL_TOKEN_B64" | base64 --decode > ./secrets/token.json
+          echo "wrote credentials.json and token.json"
+
+      - name: Write config.yaml from secret
+        env:
+          CONFIG_YAML_B64: ${{ secrets.CONFIG_YAML_B64 }}
+        run: |
+          set -e
+          echo "$CONFIG_YAML_B64" | base64 --decode > ./config.yaml
+          echo "wrote config.yaml from github secret"
+
+      - name: Run subscribe/unsubscribe bots and log results
+        env:
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
+          GMAIL_CREDENTIALS_B64: ${{ secrets.GMAIL_CREDENTIALS_B64 }}
+          GMAIL_TOKEN_B64: ${{ secrets.GMAIL_TOKEN_B64 }}
+        run: |
+          set -e
+          LOGFILE="sub_log.json"
+          TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+          echo "checking for new subscription/unsubscription emails..."
+          echo "{ \"timestamp\": \"$TIMESTAMP\", \"actions\": [" > $LOGFILE.tmp
+
+          # run subscribe bot
+          if [ -f "./scripts/subscribe_bot.py" ]; then
+            echo "running subscribe_bot.py"
+            SUB_OUTPUT=$(python ./scripts/subscribe_bot.py 2>&1 || true)
+            echo "{ \"script\": \"subscribe_bot.py\", \"output\": $(echo "$SUB_OUTPUT" | jq -R -s '.') }" >> $LOGFILE.tmp
+          else
+            echo "{ \"script\": \"subscribe_bot.py\", \"output\": \"not found\" }" >> $LOGFILE.tmp
+          fi
+
+          echo "," >> $LOGFILE.tmp
+
+          # run unsubscribe bot
+          if [ -f "./scripts/unsubscribe_bot.py" ]; then
+            echo "running unsubscribe_bot.py"
+            UNSUB_OUTPUT=$(python ./scripts/unsubscribe_bot.py 2>&1 || true)
+            echo "{ \"script\": \"unsubscribe_bot.py\", \"output\": $(echo "$UNSUB_OUTPUT" | jq -R -s '.') }" >> $LOGFILE.tmp
+          else
+            echo "{ \"script\": \"unsubscribe_bot.py\", \"output\": \"not found\" }" >> $LOGFILE.tmp
+          fi
+
+          echo "] }" >> $LOGFILE.tmp
+
+          # merge logs safely (avoid jq errors if file doesn't exist)
+          if [ -f "$LOGFILE" ]; then
+            jq -s '.[0] * .[1]' $LOGFILE $LOGFILE.tmp > $LOGFILE.new || cp $LOGFILE.tmp $LOGFILE.new
+          else
+            cp $LOGFILE.tmp $LOGFILE.new
+          fi
+
+          mv $LOGFILE.new $LOGFILE
+          rm -f $LOGFILE.tmp
+          echo "log updated: $LOGFILE"
+
+      - name: Upload subscription log artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: subscription-log
+          path: sub_log.json

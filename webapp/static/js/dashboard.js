@@ -1,0 +1,239 @@
+document.addEventListener("DOMContentLoaded", () => {
+  console.log("dashboard.js loaded");
+
+  const form = document.getElementById("prefs-form");
+  const status = document.getElementById("save-status");
+
+  
+  // ===============================
+  // feedback form submission
+  // ===============================
+  const feedbackForm = document.getElementById("feedback-form");
+  const feedbackStatus = document.getElementById("feedback-status");
+
+  if (feedbackForm) {
+    feedbackForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+
+      const payload = {
+        name: document.getElementById("name").value.trim(),
+        email: document.getElementById("email").value.trim(),
+        message: document.getElementById("message").value.trim(),
+      };
+
+      if (!payload.message) {
+        feedbackStatus.textContent = "please enter a message before sending.";
+        feedbackStatus.className = "save-status error";
+        feedbackStatus.style.opacity = 1;
+        setTimeout(() => (feedbackStatus.style.opacity = 0), 3000);
+        return;
+      }
+
+      fetch("/send-feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
+        .then((r) => r.json())
+        .then((data) => {
+          feedbackStatus.textContent = data.message || "feedback sent!";
+          feedbackStatus.className = "save-status success";
+          feedbackStatus.style.opacity = 1;
+          setTimeout(() => (feedbackStatus.style.opacity = 0), 3000);
+          feedbackForm.reset();
+        })
+        .catch(() => {
+          feedbackStatus.textContent = "error sending feedback.";
+          feedbackStatus.className = "save-status error";
+          feedbackStatus.style.opacity = 1;
+          setTimeout(() => (feedbackStatus.style.opacity = 0), 4000);
+        });
+    });
+  }
+
+
+  // ===============================
+  // helper: fade in message
+  // ===============================
+  const showMessage = (msg, color = "green") => {
+    if (!status) return;
+    status.textContent = msg;
+    status.style.color = color;
+    status.style.opacity = 0;
+    status.style.transition = "opacity 0.6s ease-in-out";
+    requestAnimationFrame(() => (status.style.opacity = 1));
+
+    setTimeout(() => {
+      status.style.opacity = 0;
+    }, 3000);
+  };
+
+
+  // ===============================
+  // view current prefs
+  // ===============================
+  const viewBtn = document.getElementById("view-current");
+  const currentPrefs = document.getElementById("current-prefs");
+
+  if (viewBtn && currentPrefs) {
+    viewBtn.addEventListener("click", () => {
+      fetch("/api/preferences")
+        .then(r => r.json())
+        .then(prefs => {
+          document.querySelector("#keywords").value = (prefs.keywords || []).join(", ");
+          document.querySelector("#authors").value = (prefs.authors || []).join(", ");
+          document.querySelector("#min_score").value = prefs.min_score || 1.0;
+
+          // categories
+          const catSelect = document.getElementById("categories");
+          if (catSelect && prefs.categories) {
+            [...catSelect.options].forEach(opt => {
+              opt.selected = prefs.categories.includes(opt.value);
+            });
+          }
+
+          const kw = prefs.keywords?.join(", ") || "(none)";
+          const au = prefs.authors?.join(", ") || "(none)";
+          const sc = prefs.min_score || 1.0;
+          const cat = prefs.categories?.join(", ") || "(astro-ph)";
+
+          currentPrefs.innerHTML = `
+            <div class="prefs-summary">
+              <strong>keywords:</strong> ${kw}<br>
+              <strong>authors:</strong> ${au}<br>
+              <strong>categories:</strong> ${cat}<br>
+              <strong>min score:</strong> ${sc}
+            </div>
+          `;
+        })
+        .catch(() => {
+          currentPrefs.innerHTML = "<em>error loading preferences.</em>";
+        });
+    });
+  }
+
+
+  // ===============================
+  // load saved prefs on page load
+  // ===============================
+  if (form) {
+    fetch("/api/preferences")
+      .then((r) => r.json())
+      .then((prefs) => {
+        if (prefs) {
+          if (prefs.keywords)
+            document.getElementById("keywords").value = prefs.keywords.join(", ");
+          if (prefs.authors)
+            document.getElementById("authors").value = prefs.authors.join(", ");
+          if (prefs.min_score)
+            document.getElementById("min_score").value = prefs.min_score;
+
+          // categories
+          const catSelect = document.getElementById("categories");
+          if (catSelect && prefs.categories) {
+            [...catSelect.options].forEach(opt => {
+              opt.selected = prefs.categories.includes(opt.value);
+            });
+          }
+
+          showMessage("loaded your saved preferences.", "#555");
+        }
+      })
+      .catch(() => console.log("no saved prefs found."));
+
+
+    // ===============================
+    // save prefs submission
+    // ===============================
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+
+      const selectedCategories = [...document.getElementById("categories").selectedOptions]
+        .map(opt => opt.value);
+
+      const data = {
+        keywords: document
+          .getElementById("keywords")
+          .value.split(",")
+          .map((x) => x.trim())
+          .filter(Boolean),
+        authors: document
+          .getElementById("authors")
+          .value.split(",")
+          .map((x) => x.trim())
+          .filter(Boolean),
+        min_score: parseFloat(document.getElementById("min_score").value) || 1.0,
+        categories: selectedCategories
+      };
+
+      fetch("/api/preferences", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      })
+        .then((r) => r.json())
+        .then(() => {
+          showMessage("preferences saved successfully!", "green");
+        })
+        .catch(() => {
+          showMessage("error saving preferences.", "red");
+        });
+    });
+  }
+
+
+  // ===============================
+  // feedback table loader
+  // ===============================
+  const feedbackTable = document.getElementById("feedback-table");
+  if (feedbackTable) {
+    console.log("[feedback] loading entries...");
+    fetch("/feedback", { headers: { "accept": "application/json" } })
+      .then((r) => r.json())
+      .then((data) => {
+        const body = feedbackTable.querySelector("tbody");
+        if (!data.length) {
+          body.innerHTML = "<tr><td colspan='5'><em>no feedback found.</em></td></tr>";
+          return;
+        }
+
+        body.innerHTML = data
+          .map(
+            (f) => `
+          <tr>
+            <td>${f.email}</td>
+            <td><a href="${f.arxiv_id}" target="_blank">${f.arxiv_id}</a></td>
+            <td>${f.liked}</td>
+            <td>${f.timestamp}</td>
+            <td>${f.source || ""}</td>
+          </tr>`
+          )
+          .join("");
+      })
+      .catch((err) => {
+        console.error("[feedback] failed to load:", err);
+        feedbackTable.outerHTML = "<p><em>no feedback found.</em></p>";
+      });
+  }
+
+
+  // ===============================
+  // navbar dashboard link handler
+  // ===============================
+  const dashLink = document.querySelector("#dashboard-link");
+  if (dashLink) {
+    const savedEmail = localStorage.getItem("astro_email");
+    if (savedEmail) {
+      dashLink.href = `/dashboard/${savedEmail}`;
+    }
+
+    const emailField = document.getElementById("email");
+    if (emailField) {
+      emailField.addEventListener("change", () => {
+        if (emailField.value.trim()) {
+          localStorage.setItem("astro_email", emailField.value.trim());
+        }
+      });
+    }
+  }
+});

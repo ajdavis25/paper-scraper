@@ -1,0 +1,736 @@
+/* ===============================
+   astro-ph digest — ui theme
+   =============================== */
+
+:root {
+  --astro-red: #a70000;
+  --astro-light: #f8f8f8;
+  --astro-accent: #c70000;
+  --astro-text: #222;
+  --astro-link: #a70000;
+  --astro-hover: #800000;
+  --astro-border: #ddd;
+  --astro-muted: #666;
+}
+
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background-color: #fafafa;
+  color: #222;
+  margin: 0;
+  padding: 0;
+}
+
+/* ========== HEADER ========== */
+header {
+  background-color: #fff;
+  border-bottom: 1px solid #ddd;
+  padding: 1rem 2rem;
+}
+
+header h1 {
+  margin: 0 0 0.25rem;
+  color: #800000;
+}
+
+h1 a {
+  text-decoration: none;
+  color: var(--astro-red);
+}
+
+h1 a:hover {
+  color: var(--astro-hover);
+}
+
+/* ========== NAVIGATION ========== */
+nav {
+  margin-top: 0.3em;
+}
+
+nav a {
+  margin-right: 1.2rem;
+  color: #a00;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+nav a:hover {
+  text-decoration: underline;
+}
+
+/* ========== MAIN CONTENT ========== */
+main {
+  padding: 2rem;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+/* button-style links (subscribe/unsubscribe/dashboard) */
+.view-btn {
+  background-color: #444;
+  color: #fff;
+  border: none;
+  padding: 0.6rem 1.2rem;
+  border-radius: 5px;
+  font-size: 1rem;
+  cursor: pointer;
+  margin-left: 1rem;
+}
+
+.view-btn:hover {
+  background-color: #222;
+}
+
+.current-prefs {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: #f7f7f7;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 0.95rem;
+}
+
+.prefs-summary {
+  line-height: 1.6;
+}
+
+a.btn {
+  display: inline-block;
+  background: var(--astro-red);
+  color: white;
+  padding: 0.6em 1.2em;
+  border-radius: 4px;
+  text-decoration: none;
+  font-weight: 600;
+  transition: background 0.2s ease;
+}
+
+a.btn:hover {
+  background: var(--astro-hover);
+}
+
+/* subtle secondary link button (like unsubscribe) */
+a.btn-secondary {
+  background: transparent;
+  color: var(--astro-link);
+  border: 1px solid var(--astro-link);
+}
+
+a.btn-secondary:hover {
+  background: var(--astro-link);
+  color: white;
+}
+
+/* ========== PAPER LIST ========== */
+ul.paper-list {
+  list-style: none;
+  padding-left: 0;
+}
+
+ul.paper-list li {
+  margin-bottom: 1em;
+}
+
+ul.paper-list a {
+  color: var(--astro-link);
+  font-weight: 600;
+}
+
+ul.paper-list a:hover {
+  color: var(--astro-hover);
+}
+
+/* ========== FOOTER ========== */
+footer {
+  text-align: center;
+  padding: 1rem;
+  color: #777;
+  font-size: 0.9rem;
+  border-top: 1px solid #ddd;
+  margin-top: 3rem;
+}
+
+/* ========== PREFERENCES ========== */
+.prefs-container {
+  background: #fff;
+  padding: 2rem;
+  border-radius: 10px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+  border: 1px solid #ddd;
+}
+
+.prefs-form .form-group,
+.prefs-form .form-group-inline {
+  margin-bottom: 1.5rem;
+}
+
+.prefs-form label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 0.4rem;
+}
+
+.prefs-form textarea,
+.prefs-form input {
+  width: 100%;
+  padding: 0.5rem;
+  border-radius: 5px;
+  border: 1px solid #bbb;
+  font-size: 1rem;
+  font-family: inherit;
+}
+
+.prefs-form textarea:focus,
+.prefs-form input:focus {
+  outline: none;
+  border-color: #a00;
+  box-shadow: 0 0 0 2px rgba(160,0,0,0.2);
+}
+
+.save-btn {
+  background-color: #a00;
+  color: #fff;
+  border: none;
+  padding: 0.6rem 1.2rem;
+  border-radius: 5px;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.save-btn:hover {
+  background-color: #900;
+}
+
+.save-status {
+  opacity: 0;
+  transition: opacity 0.6s ease-in-out;
+  font-weight: 600;
+  margin-top: 1rem;
+}
+
+.feedback-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 1rem;
+}
+
+.feedback-table th,
+.feedback-table td {
+  border: 1px solid #ddd;
+  padding: 0.5rem;
+  text-align: left;
+}
+
+.feedback-table th {
+  background-color: #f0f0f0;
+  font-weight: 600;
+}
+
+.feedback-table tr:nth-child(even) {
+  background-color: #fafafa;
+}
+
+/* ===== FEEDBACK FORM ===== */
+.feedback-container.card {
+  background: #fff;
+  padding: 2rem 2.5rem;
+  border-radius: 12px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+  border: 1px solid #ddd;
+  max-width: 600px;
+  margin: 2rem auto;
+}
+
+.feedback-container h2 {
+  margin-top: 0;
+  color: var(--astro-red);
+}
+
+.feedback-container .muted {
+  color: var(--astro-muted);
+  margin-bottom: 1.5rem;
+}
+
+.feedback-form .form-group {
+  margin-bottom: 1.25rem;
+}
+
+.feedback-form label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 0.4rem;
+}
+
+.feedback-form input,
+.feedback-form textarea {
+  width: 100%;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid #bbb;
+  border-radius: 6px;
+  font-size: 1rem;
+  font-family: inherit;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.feedback-form input:focus,
+.feedback-form textarea:focus {
+  outline: none;
+  border-color: var(--astro-red);
+  box-shadow: 0 0 0 2px rgba(167, 0, 0, 0.2);
+}
+
+.form-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.save-status {
+  font-weight: 600;
+  margin-top: 0.5rem;
+  transition: opacity 0.6s ease-in-out;
+}
+
+.save-status.success {
+  color: green;
+  opacity: 1;
+}
+
+.save-status.error {
+  color: red;
+  opacity: 1;
+}
+
+/* ========= SUBSCRIBE SECTION ========== */
+section.subscribe-section,
+section.unsubscribe-section {
+  max-width: 600px;
+  margin: 2em auto;
+  padding: 1.5em;
+  border-radius: 12px;
+  background: #fafafa;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.1);
+  text-align: center;
+}
+
+.input-field {
+  width: 70%;
+  padding: 0.6em;
+  margin-right: 0.5em;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+}
+
+.flash {
+  margin-top: 1em;
+  padding: 0.6em;
+  border-radius: 6px;
+}
+
+.flash.success {
+  background: #e8f8f0;
+  color: #1e7e34;
+}
+
+.flash.error {
+  background: #fbeaea;
+  color: #b22222;
+}
+
+.flash.info {
+  background: #eef4fb;
+  color: #1d4e89;
+}
+
+#sub-status {
+  font-weight: 500;
+  color: #1e7e34;
+  transition: opacity 0.6s ease-in-out;
+  margin-top: 1em;
+}
+
+#sub-status.error { color: #b31b1b; }
+#sub-status.info  { color: #555; }
+
+/* ===== RECOMMENDATIONS FEEDBACK BUTTONS ===== */
+.feedback-buttons {
+  margin-top: 8px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.like-btn,
+.dislike-btn {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: transform 0.15s ease, color 0.15s ease;
+  color: #555;
+}
+
+.like-btn:hover {
+  transform: scale(1.2);
+  color: green;
+}
+
+.dislike-btn:hover {
+  transform: scale(1.2);
+  color: red;
+}
+
+/* ===== arXiv category selector styling ===== */
+#categories {
+  width: 100%;
+  max-width: 400px;
+  height: auto;
+  min-height: 8em;
+  padding: 0.6em 0.8em;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  background-color: #fff;
+  font-size: 0.95rem;
+  font-family: inherit;
+  color: #222;
+  outline: none;
+  transition: all 0.2s ease-in-out;
+  box-shadow: 0 0 0 rgba(0, 0, 0, 0);
+}
+
+#categories:hover {
+  border-color: #a00;
+  box-shadow: 0 0 4px rgba(170, 0, 0, 0.3);
+}
+
+#categories:focus {
+  border-color: #b30000;
+  box-shadow: 0 0 6px rgba(180, 0, 0, 0.4);
+}
+
+/* highlight selected items in your theme red */
+#categories option:checked {
+  background-color: #b30000;
+  color: #fff;
+}
+
+/* label and helper text alignment */
+label[for="categories"] {
+  display: block;
+  margin-bottom: 0.3em;
+  font-weight: 600;
+  color: #111;
+}
+
+small {
+  display: block;
+  margin-top: 0.2em;
+  font-size: 0.85rem;
+  color: #666;
+}
+
+.category-tag {
+  display: inline-block;
+  background-color: #f3f3f3;
+  color: #444;
+  font-size: 0.85em;
+  padding: 3px 8px;
+  border-radius: 12px;
+  margin-right: 8px;
+}
+
+.score-tag {
+  display: inline-block;
+  background-color: #ffe6cc;
+  color: #c05a00;
+  font-size: 0.85em;
+  padding: 3px 8px;
+  border-radius: 12px;
+  margin-right: 8px;
+}
+
+.meta {
+  margin-bottom: 0.5em;
+  font-size: 0.9em;
+  color: #666;
+}
+
+.summary {
+  margin-top: 0.5em;
+  margin-bottom: 1em;
+  line-height: 1.4;
+}
+
+/* consistent button styling */
+button, .btn {
+  font-family: inherit;
+  font-size: 1rem;
+  padding: 0.5em 1.2em;
+  border: 2px solid #800000; /* dark red */
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: white;
+  color: #800000;
+}
+
+button:hover, .btn:hover {
+  background: #800000;
+  color: white;
+}
+
+button:active, .btn:active {
+  background: #a00000;
+  border-color: #a00000;
+}
+
+/* make subscribe special (filled by default) */
+button.subscribe, .btn.subscribe {
+  background: #800000;
+  color: white;
+}
+
+button.subscribe:hover, .btn.subscribe:hover {
+  background: #a00000;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 1rem;
+}
+
+th, td {
+  border: 1px solid #ccc;
+  padding: 0.5rem;
+  text-align: left;
+}
+
+thead {
+  background-color: #f5f5f5;
+}
+
+/* ===== LOGIN PAGE STYLING ===== */
+.login-container {
+  max-width: 400px;
+  margin: 100px auto;
+  padding: 2rem;
+  background-color: #fff;
+  border: 1px solid #ccc;
+  border-radius: 12px;
+  box-shadow: 0 0 10px rgba(0,0,0,0.1);
+  font-family: "Helvetica Neue", sans-serif;
+}
+
+.login-container h2 {
+  text-align: center;
+  margin-bottom: 1.5rem;
+  font-weight: 600;
+  color: #600000;  /* matches site theme */
+}
+
+.login-container label {
+  display: block;
+  margin-bottom: 0.25rem;
+  font-weight: 500;
+}
+
+.login-container input {
+  width: 100%;
+  padding: 0.6rem;
+  margin-bottom: 1rem;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-size: 1rem;
+}
+
+.login-container button {
+  width: 100%;
+  padding: 0.75rem;
+  background-color: #800000;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.login-container button:hover {
+  background-color: #a00000;
+}
+
+/* responsive adjustments for phone */
+@media (max-width: 480px) {
+  .login-container {
+    margin: 50px 1rem;
+    padding: 1.5rem;
+  }
+}
+
+/* ===== SIGNUP PAGE STYLING ===== */
+.signup-text {
+  margin-top: 1rem;
+  text-align: center;
+  font-size: 0.95rem;
+  color: #555;
+}
+
+.signup-text a {
+  color: #800000;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.signup-text a:hover {
+  text-decoration: underline;
+}
+
+.form-box {
+  max-width: 450px;
+  margin: 3rem auto;
+  padding: 2rem;
+  border-radius: 12px;
+  background-color: white;
+  box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
+}
+
+.form-title {
+  text-align: center;
+  font-size: 1.75rem;
+  color: #700000;
+  margin-bottom: 1.5rem;
+}
+
+input[type="text"],
+input[type="password"] {
+  width: 100%;
+  padding: 0.75rem;
+  margin: 0.5rem 0 1rem 0;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-size: 1rem;
+}
+
+.submit-btn {
+  width: 100%;
+  padding: 0.75rem;
+  background-color: #800000;
+  color: white;
+  font-size: 1rem;
+  border: none;
+  border-radius: 6px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.submit-btn:hover {
+  background-color: #a00000;
+}
+
+.signup-text {
+  margin-top: 1rem;
+  text-align: center;
+  font-size: 0.95rem;
+  color: #555;
+}
+
+.signup-text a {
+  color: #800000;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.signup-text a:hover {
+  text-decoration: underline;
+}
+
+.form-box {
+  background: white;
+  border-radius: 12px;
+  padding: 2rem;
+  max-width: 400px;
+  margin: 3rem auto;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.form-title {
+  text-align: center;
+  font-size: 1.6rem;
+  font-weight: bold;
+  color: #7b0000;
+  margin-bottom: 1.5rem;
+}
+
+form {
+  display: flex;
+  flex-direction: column;
+}
+
+label {
+  font-size: 0.95rem;
+  margin-bottom: 0.3rem;
+  color: #333;
+}
+
+input[type="text"],
+input[type="password"] {
+  padding: 0.5rem;
+  margin-bottom: 1.2rem;
+  border-radius: 5px;
+  border: 1px solid #ccc;
+  font-size: 1rem;
+}
+
+.submit-btn {
+  background-color: #7b0000;
+  color: white;
+  border: none;
+  padding: 0.75rem;
+  font-size: 1rem;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.submit-btn:hover {
+  background-color: #600000;
+}
+
+a.forgot-password-link {
+  color: #7b0000;
+  font-size: 0.9rem;
+  margin-top: 0.5rem;
+  text-align: left;
+  display: inline-block;
+}
+
+a.forgot-password-link:hover {
+  text-decoration: underline;
+  color: #600000;
+}
+
+input[type="email"],
+input[type="password"],
+input[type="text"] {
+  background-color: #f0f8ff;  /* light blue background */
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  padding: 10px;
+  width: 100%;
+  box-sizing: border-box;
+  font-size: 1rem;
+  margin-bottom: 1rem;
+}
+
+.form-control {
+  background-color: #f0f8ff;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  padding: 10px;
+  width: 100%;
+  box-sizing: border-box;
+  font-size: 1rem;
+  margin-bottom: 1rem;
+}

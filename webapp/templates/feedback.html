@@ -1,0 +1,44 @@
+{% extends "base.html" %} {% block title %}user feedback{% endblock %} {% block
+content %}
+<h2>user feedback</h2>
+<p>recent likes and dislikes recorded by users.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>email</th>
+      <th>arXiv id</th>
+      <th>liked</th>
+      <th>timestamp</th>
+      <th>source</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for entry in feedback %}
+    <tr>
+      <td>{{ entry.email }}</td>
+
+      <td>
+        {% if entry.arxiv_id %}
+        <a href="https://arxiv.org/abs/{{ entry.arxiv_id }}" target="_blank">
+          {{ entry.arxiv_id }}
+        </a>
+        {% else %}
+        <span style="color: #888">—</span>
+        {% endif %}
+      </td>
+
+      <td>{{ '✓' if entry.liked else '✗' }}</td>
+      <td>{{ entry.timestamp }}</td>
+      <td>{{ entry.source or '—' }}</td>
+    </tr>
+    {% else %}
+    <tr>
+      <td colspan="5" style="text-align: center; color: #888">
+        no feedback entries yet.
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}
