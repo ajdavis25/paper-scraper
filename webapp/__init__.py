@@ -1,6 +1,8 @@
 from flask import Flask
 from flask_login import LoginManager
-import os, sys
+import os
+import sys
+import tempfile
 from pathlib import Path
 
 # ensure the project root (containing `webapp` and `shared`) is importable
@@ -10,10 +12,19 @@ _root_str = str(_project_root)
 if _root_str not in sys.path:
     sys.path.insert(0, _root_str)
 
-from shared.db import db, init_app as init_db
+from shared.db import db, resolve_database_uri
 from shared.mail import mail
 
 _app_instance = None
+_FALLBACK_SQLITE_NAME = "feedback.db"
+
+
+def _fallback_sqlite_uri() -> str:
+    """
+    match the previous behaviour precisely: pick /tmp/feedback.db on read-only deployments.
+    """
+    db_path = Path(tempfile.gettempdir()) / _FALLBACK_SQLITE_NAME
+    return f"sqlite:///{db_path.as_posix()}"
 
 
 def create_app():
@@ -23,11 +34,15 @@ def create_app():
 
     app = Flask(__name__)
     app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev-secret-key")
-    # allow explicit configuration while letting shared.db supply safe defaults
-    app.config.setdefault("SQLALCHEMY_DATABASE_URI", os.getenv("DATABASE_URL"))
-    app.config.setdefault("SQLALCHEMY_TRACK_MODIFICATIONS", False)
+    app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
-    init_db(app)
+    env_uri = os.getenv("DATABASE_URL")
+    if env_uri:
+        app.config["SQLALCHEMY_DATABASE_URI"] = resolve_database_uri(env_uri)
+    else:
+        app.config["SQLALCHEMY_DATABASE_URI"] = _fallback_sqlite_uri()
+
+    db.init_app(app)
     mail.init_app(app)
 
     from .models import User, Paper, UserPreference, Subscriber, Feedback

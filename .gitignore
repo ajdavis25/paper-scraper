@@ -28,3 +28,4 @@ secrets/credentials.json
 secrets/token.json
 .vercel
 astroph-bot/scratch/*.py
+logs/*
