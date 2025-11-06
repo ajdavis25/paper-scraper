@@ -69,7 +69,7 @@ def send_email(cfg, subject, text_body, html_body, to_override=None):
                 msg.attach(MIMEText(html_body, "html", "utf-8"))
 
                 try:
-                    s.sendmail(em["from_addr"], addr, msg.as_string())
+                    s.sendmail(em["from_addr"], addr, msg.as_bytes())
                     print(f"[mailer] sent email to {addr}")
                 except Exception as e:
                     print(f"[mailer] failed to send email to {addr}: {e}")

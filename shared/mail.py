@@ -97,7 +97,7 @@ def send_email(cfg, subject, text, html=None):
             if mail_cfg.get("use_starttls", True):
                 smtp.starttls()
             smtp.login(username, password)
-            smtp.sendmail(from_addr, to_addrs, msg.as_string())
+            smtp.sendmail(from_addr, to_addrs, msg.as_bytes())
 
         print("[mailer] email sent successfully")
         return True
