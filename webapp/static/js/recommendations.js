@@ -19,12 +19,19 @@ document.addEventListener("click", (e) => {
 });
 
 
-// render latex after page load
-document.addEventListener("DOMContentLoaded", () => {
+function typesetMath() {
   if (window.MathJax?.typesetPromise) {
-    MathJax.typesetPromise();
+    MathJax.typesetPromise().catch((err) =>
+      console.warn("[mathjax] typeset error:", err)
+    );
   }
-});
+}
+
+if (document.readyState === "complete") {
+  typesetMath();
+} else {
+  window.addEventListener("load", typesetMath);
+}
 
 
 // main async sender
