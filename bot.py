@@ -284,6 +284,14 @@ def render_paper_entry_html(paper, user_email, track_base):
     category = paper.get("category")
     score = paper.get("score")
     published = paper.get("published")
+    if isinstance(published, dt.datetime):
+        published_display = published.strftime("%Y-%m-%d")
+    else:
+        published_display = (published or "").strip()
+    if isinstance(published, dt.datetime):
+        published_display = published.strftime("%Y-%m-%d")
+    else:
+        published_display = (published or "").strip()
 
     parts = [
         "<li>",
@@ -294,8 +302,8 @@ def render_paper_entry_html(paper, user_email, track_base):
         meta_bits.append(f"<span class='category-tag'>{category}</span>")
     if score is not None:
         meta_bits.append(f"<span class='score-tag'>score: {score}</span>")
-    if published:
-        meta_bits.append(f"<span class='date'>{published}</span>")
+    if published_display:
+        meta_bits.append(f"<span class='date'>{published_display}</span>")
     if meta_bits:
         parts.append("<p>" + " ".join(meta_bits) + "</p>")
     if authors_line:
@@ -324,14 +332,14 @@ def render_paper_entry_text(paper, user_email, track_base):
 
     lines = []
     lines.append(f"{title}\n{link}\n")
-    if category or score is not None or published:
+    if category or score is not None or published_display:
         meta = []
         if category:
             meta.append(f"category: {category}")
         if score is not None:
             meta.append(f"score: {score}")
-        if published:
-            meta.append(f"published: {published}")
+        if published_display:
+            meta.append(f"published: {published_display}")
         lines.append("; ".join(meta) + "\n")
     if authors_line:
         lines.append(f"authors: {authors_line}\n")
@@ -422,3 +430,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

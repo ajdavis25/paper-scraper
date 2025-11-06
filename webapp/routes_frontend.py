@@ -3,6 +3,7 @@ from flask import Blueprint, render_template, request, jsonify, abort, redirect,
 from flask_login import current_user, login_required, login_user, logout_user
 from werkzeug.security import generate_password_hash, check_password_hash
 from itsdangerous import SignatureExpired, BadSignature
+from sqlalchemy import func
 
 from shared.db import db
 from webapp.models import User, Paper, UserPreference, Subscriber, Feedback, PreferenceConfig
@@ -391,37 +392,28 @@ def recommendations():
 # ----------------------------------------------------------
 # record recommendation feedback (like/dislike)
 # ----------------------------------------------------------
-@frontend.route("/api/recommendation-feedback", methods=["POST"])
-def recommendation_feedback():
-    """store recommendation reactions directly in the database."""
-    from datetime import datetime
+def _record_recommendation_feedback(email: str, arxiv_id: str, liked: bool, source: str = "recommendations"):
+    """Shared helper to store recommendation feedback."""
+    email = (email or "").strip().lower()
+    arxiv_id = (arxiv_id or "").strip()
+    if not email or not arxiv_id:
+        raise ValueError("missing email or arxiv_id")
 
-    data = request.get_json(force=True)
-    email = (data.get("email") or "").strip().lower()
-    link = (data.get("link") or "").strip()
-    liked = bool(data.get("reaction", True))
-
-    if not email or not link:
-        return jsonify({"error": "missing email or link"}), 400
-
-    # normalize arxiv id
-    arxiv_id = link.split("arxiv.org/abs/")[-1].strip()
-
-    # find or create user
-    user = User.query.filter_by(email=email).first()
+    user = (
+        User.query.filter(func.lower(User.email) == email)
+        .first()
+    )
     if not user:
         user = User(email=email, password_hash="")
         db.session.add(user)
-        db.session.commit()
+        db.session.flush()
 
-    # find or create paper
     paper = Paper.query.filter_by(arxiv_id=arxiv_id).first()
     if not paper:
         paper = Paper(arxiv_id=arxiv_id, title="", link=f"https://arxiv.org/abs/{arxiv_id}")
         db.session.add(paper)
-        db.session.commit()
+        db.session.flush()
 
-    # update or insert preference
     pref = UserPreference.query.filter_by(user_id=user.id, paper_id=paper.id).first()
     if not pref:
         pref = UserPreference(user_id=user.id, paper_id=paper.id, liked=liked)
@@ -429,27 +421,75 @@ def recommendation_feedback():
     else:
         pref.liked = liked
 
+    fb_entry = Feedback(
+        name="system",
+        email=email,
+        message=f"reaction {'like' if liked else 'dislike'} for {arxiv_id}",
+        type="recommendation",
+        arxiv_id=arxiv_id,
+        liked=liked,
+        source=source,
+    )
+    db.session.add(fb_entry)
     db.session.commit()
-    print(f"[recommendation-feedback] saved like={liked} for {arxiv_id} ({email})")
 
-    # also store in feedback table for admin viewing
+    print(f"[recommendation-feedback] saved like={liked} for {arxiv_id} ({email}) via {source}")
+
+
+@frontend.route("/api/recommendation-feedback", methods=["POST"])
+def recommendation_feedback():
+    """store recommendation reactions directly in the database."""
+    data = request.get_json(force=True)
+    email = data.get("email")
+    link = data.get("link") or ""
+    liked = bool(data.get("reaction", True))
+
+    arxiv_id = link.split("arxiv.org/abs/")[-1].strip()
+    if not email or not arxiv_id:
+        return jsonify({"error": "missing email or link"}), 400
+
     try:
-        fb_entry = Feedback(
-            name="system",
-            email=email,
-            message=f"reaction {'like' if liked else 'dislike'} for {arxiv_id}",
-            type="recommendation",
-            arxiv_id=arxiv_id,
-            liked=liked,
-            source="recommendations",
-        )
-        db.session.add(fb_entry)
-        db.session.commit()
-    except Exception as e:
-        print(f"[recommendation-feedback] failed to log in feedback: {e}")
+        _record_recommendation_feedback(email, arxiv_id, liked, source="recommendations")
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except Exception as exc:
         db.session.rollback()
+        return jsonify({"error": str(exc)}), 500
 
     return jsonify({"status": "ok"})
+
+
+@frontend.route("/like")
+def like_from_email():
+    """Handle email like/dislike links."""
+    email = request.args.get("email", "")
+    arxiv_id = request.args.get("arxiv_id", "")
+    liked_param = request.args.get("liked", "true")
+    liked = str(liked_param).lower() in {"1", "true", "yes", "on"}
+
+    try:
+        _record_recommendation_feedback(email, arxiv_id, liked, source="email")
+        heading = "Thanks for your feedback!"
+        message = f"We recorded your {'like' if liked else 'dislike'} for arXiv:{arxiv_id}."
+        status = 200
+    except ValueError:
+        heading = "Missing information"
+        message = "We couldn't record your feedback because the link was incomplete."
+        status = 400
+    except Exception as exc:
+        heading = "Something went wrong"
+        message = "We couldn't record your feedback. Please try again later."
+        status = 500
+        print(f"[like_from_email] error storing feedback: {exc}")
+
+    return (
+        render_template(
+            "email_feedback.html",
+            heading=heading,
+            message=message,
+        ),
+        status,
+    )
 
 
 # ----------------------------------------------------------
