@@ -61,7 +61,13 @@ def create_app():
     app.register_blueprint(backend, url_prefix="/api")
 
     with app.app_context():
-        db.create_all()
+        try:
+            db.create_all()
+        except Exception as exc:  # pragma: no cover
+            import traceback
+            print("[startup] db.create_all() failed:", exc, file=sys.stderr)
+            traceback.print_exc()
+            raise
 
     _app_instance = app
     return app
