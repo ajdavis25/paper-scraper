@@ -4,6 +4,7 @@ database initialization helpers and uri resolution.
 """
 import os
 import tempfile
+from contextlib import suppress
 from pathlib import Path
 from typing import Optional
 from flask_sqlalchemy import SQLAlchemy
@@ -11,7 +12,27 @@ from flask_sqlalchemy import SQLAlchemy
 db = SQLAlchemy()
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
-_DEFAULT_SQLITE_NAME = "app.db"
+_DEFAULT_SQLITE_NAME = "feedback.db"
+
+
+def _directory_is_writable(directory: Path) -> bool:
+    try:
+        directory.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        print(f"[db] warning: could not ensure directory {directory}: {exc}")
+        return False
+
+    probe = directory / ".write_check"
+    try:
+        with open(probe, "w", encoding="utf-8") as handle:
+            handle.write("ok")
+        probe.unlink()
+        return True
+    except OSError as exc:
+        print(f"[db] warning: directory {directory} is not writable: {exc}")
+        with suppress(FileNotFoundError):
+            probe.unlink()
+        return False
 
 
 def _sqlite_uri_for(path: Path) -> str:
@@ -35,26 +56,22 @@ def resolve_database_uri(candidate: Optional[str] = None) -> str:
             path = Path(raw_path)
             if not path.is_absolute():
                 path = (_PROJECT_ROOT / path).resolve()
-            try:
-                path.parent.mkdir(parents=True, exist_ok=True)
-            except OSError as exc:
-                print(f"[db] warning: cannot prepare sqlite directory {path.parent}: {exc}; using tmp storage.")
-                tmp_path = (Path(tempfile.gettempdir()) / _DEFAULT_SQLITE_NAME).resolve()
-                tmp_path.parent.mkdir(parents=True, exist_ok=True)
-                return _sqlite_uri_for(tmp_path)
-            return _sqlite_uri_for(path)
+            if _directory_is_writable(path.parent):
+                return _sqlite_uri_for(path)
+            print(f"[db] warning: sqlite path {path} not writable; using tmp storage.")
+            tmp_path = (Path(tempfile.gettempdir()) / _DEFAULT_SQLITE_NAME).resolve()
+            tmp_path.parent.mkdir(parents=True, exist_ok=True)
+            return _sqlite_uri_for(tmp_path)
         return uri
 
     instance_path = (_PROJECT_ROOT / "instance" / _DEFAULT_SQLITE_NAME).resolve()
-    try:
-        instance_path.parent.mkdir(parents=True, exist_ok=True)
+    if _directory_is_writable(instance_path.parent):
         return _sqlite_uri_for(instance_path)
-    except OSError as exc:
-        print(f"[db] warning: cannot write to instance directory ({instance_path.parent}): {exc}")
-        tmp_path = (Path(tempfile.gettempdir()) / _DEFAULT_SQLITE_NAME).resolve()
-        tmp_path.parent.mkdir(parents=True, exist_ok=True)
-        print(f"[db] using temporary sqlite database at {tmp_path}")
-        return _sqlite_uri_for(tmp_path)
+
+    tmp_path = (Path(tempfile.gettempdir()) / _DEFAULT_SQLITE_NAME).resolve()
+    tmp_path.parent.mkdir(parents=True, exist_ok=True)
+    print(f"[db] using temporary sqlite database at {tmp_path}")
+    return _sqlite_uri_for(tmp_path)
 
 
 def init_app(app):
