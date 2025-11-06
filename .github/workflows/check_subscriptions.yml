@@ -8,6 +8,8 @@ on:
 jobs:
   check-subs:
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
     steps:
       - name: Checkout repo

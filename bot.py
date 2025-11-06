@@ -153,31 +153,40 @@ def fetch_recent(cfg):
 
 
 def load_db_recipients():
-    """fetch user emails from the database, if available."""
+    """fetch recipient emails from the database, if available."""
     try:
         from webapp import create_app
-        from webapp.models import User
+        from webapp.models import User, Subscriber
     except Exception as exc:
         print(f"[astro-ph bot] skipping db recipients (import error: {exc})")
         return []
 
     try:
         app = create_app()
+    except Exception as exc:
+        print(f"[astro-ph bot] skipping db recipients (app init error: {exc})")
+        return []
+
+    emails = set()
+    try:
         with app.app_context():
-            emails = [
-                (email or "").strip().lower()
-                for (email,) in User.query.with_entities(User.email).all()
-            ]
+            for model in (Subscriber, User):
+                try:
+                    rows = model.query.with_entities(model.email).all()
+                    for (email,) in rows:
+                        if email:
+                            emails.add(email.strip().lower())
+                except Exception as inner_exc:
+                    print(f"[astro-ph bot] unable to read {model.__name__}: {inner_exc}")
     except Exception as exc:
         print(f"[astro-ph bot] skipping db recipients (db error: {exc})")
         return []
 
-    emails = [e for e in emails if e]
     if emails:
         print(f"[astro-ph bot] loaded {len(emails)} email(s) from database.")
     else:
         print("[astro-ph bot] no recipient emails found in database.")
-    return emails
+    return sorted(emails)
 
 
 def curate(cfg, results):
@@ -335,11 +344,14 @@ def main():
         print(f"[astro-ph bot] TEST MODE ENABLED — will only send to {test_addr}")
         cfg["output"]["email"]["to_addrs"] = [test_addr]
     else:
-        existing = cfg.get("output", {}).get("email", {}).get("to_addrs", [])
+        email_cfg = cfg.setdefault("output", {}).setdefault("email", {})
+        existing = email_cfg.get("to_addrs", [])
         db_recipients = load_db_recipients()
         combined = sorted({*(addr.strip().lower() for addr in existing if addr), *db_recipients})
         if combined:
-            cfg["output"]["email"]["to_addrs"] = combined
+            email_cfg["to_addrs"] = combined
+        else:
+            email_cfg.setdefault("to_addrs", existing)
 
     # where your flask app is serving the /like endpoint
     track_base = (

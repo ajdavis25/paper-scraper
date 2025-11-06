@@ -2,7 +2,8 @@ from __future__ import print_function
 from googleapiclient.discovery import build
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
-import os.path, re, yaml, base64
+from sqlalchemy import func
+import os.path, re, base64
 from email.mime.text import MIMEText
 
 # gmail scopes for read + send
@@ -125,7 +126,7 @@ def check_new_subscribers():
             send_stanford_reply(service, email_addr)
 
         print(f"subscribing {email_addr}")
-        added = add_to_mailing_list(email_addr)
+        added = add_to_database(email_addr)
         if added:
             send_welcome_email(service, email_addr)
 
@@ -139,23 +140,46 @@ def mark_as_read(service, msg_id):
     ).execute()
 
 
-def add_to_mailing_list(new_email):
-    """append new email to output.email.to_addrs if not already present."""
-    cfg_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../config.yaml")
+def add_to_database(new_email):
+    """Insert subscriber into the database if not already present."""
+    try:
+        from webapp import create_app
+        from webapp.models import Subscriber
+        from shared.db import db
+    except Exception as exc:
+        print(f"[subscribe] failed to import app/db modules: {exc}")
+        return False
 
-    with open(cfg_path, "r", encoding="utf-8") as f:
-        cfg = yaml.safe_load(f)
+    try:
+        app = create_app()
+    except Exception as exc:
+        print(f"[subscribe] failed to initialise app: {exc}")
+        return False
 
-    to_addrs = cfg["output"]["email"]["to_addrs"]
+    lower_email = (new_email or "").strip().lower()
+    if not lower_email:
+        print("[subscribe] empty email, skipping.")
+        return False
 
-    if new_email not in to_addrs:
-        to_addrs.append(new_email)
-        with open(cfg_path, "w", encoding="utf-8") as f:
-            yaml.safe_dump(cfg, f, sort_keys=False)
-        print(f"added {new_email} to mailing list.")
-        return True
-    else:
-        print(f"already subscribed: {new_email}")
+    try:
+        with app.app_context():
+            existing = (
+                Subscriber.query
+                .filter(func.lower(Subscriber.email) == lower_email)
+                .first()
+            )
+            if existing:
+                print(f"already subscribed: {new_email}")
+                return False
+
+            sub = Subscriber(email=lower_email)
+            db.session.add(sub)
+            db.session.commit()
+            print(f"added {new_email} to subscriber table.")
+            return True
+    except Exception as exc:
+        print(f"[subscribe] database error: {exc}")
+        db.session.rollback()
         return False
 
 

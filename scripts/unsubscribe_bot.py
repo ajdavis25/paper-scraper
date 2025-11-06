@@ -2,7 +2,8 @@ from __future__ import print_function
 from googleapiclient.discovery import build
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
-import os.path, re, yaml, base64
+from sqlalchemy import func
+import os.path, re, base64
 from email.mime.text import MIMEText
 
 # gmail scopes for read + send
@@ -96,7 +97,9 @@ def check_unsubscribers():
 
         if email_addr:
             print(f"removing {email_addr} from mailing list")
-            send_unsub_confirm(service, email_addr)  # always send farewell email
+            removed = remove_from_database(email_addr)
+            if removed:
+                send_unsub_confirm(service, email_addr)  # always send farewell email
             mark_as_read(service, msg["id"])
         else:
             print(f"could not parse sender: {sender}")
@@ -109,23 +112,44 @@ def mark_as_read(service, msg_id):
     ).execute()
 
 
-def remove_from_mailing_list(email_addr):
-    """remove an email from the YAML config."""
-    cfg_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../config.yaml")
+def remove_from_database(email_addr):
+    """remove an email from the subscriber table."""
+    try:
+        from webapp import create_app
+        from webapp.models import Subscriber
+        from shared.db import db
+    except Exception as exc:
+        print(f"[unsubscribe] failed to import app/db modules: {exc}")
+        return False
 
-    with open(cfg_path, "r", encoding="utf-8") as f:
-        cfg = yaml.safe_load(f)
+    try:
+        app = create_app()
+    except Exception as exc:
+        print(f"[unsubscribe] failed to initialise app: {exc}")
+        return False
 
-    to_addrs = cfg["output"]["email"]["to_addrs"]
+    lower_email = (email_addr or "").strip().lower()
+    if not lower_email:
+        return False
 
-    if email_addr in to_addrs:
-        to_addrs.remove(email_addr)
-        with open(cfg_path, "w", encoding="utf-8") as f:
-            yaml.safe_dump(cfg, f, sort_keys=False)
-        print(f"removed {email_addr} from mailing list.")
-        return True
-    else:
-        print(f"address not found: {email_addr}")
+    try:
+        with app.app_context():
+            existing = (
+                Subscriber.query
+                .filter(func.lower(Subscriber.email) == lower_email)
+                .first()
+            )
+            if not existing:
+                print(f"address not found in database: {email_addr}")
+                return False
+
+            db.session.delete(existing)
+            db.session.commit()
+            print(f"removed {email_addr} from subscriber table.")
+            return True
+    except Exception as exc:
+        print(f"[unsubscribe] database error: {exc}")
+        db.session.rollback()
         return False
 
 
