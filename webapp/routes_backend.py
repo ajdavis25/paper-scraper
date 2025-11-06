@@ -1,49 +1,48 @@
 #!/usr/bin/env python3
 """
-routes_backend.py — backend routes for astro-ph digest
+backend routes that power the dashboard / JSON APIs.
 """
-import os, yaml
 from flask import Blueprint, request, jsonify
+
 from shared.db import db
+from webapp.models import PreferenceConfig
 
 backend = Blueprint("backend", __name__)
 
 
-# ----------------------------------------------------------
-# user preferences api (for dashboard)
-# ----------------------------------------------------------
 @backend.route("/preferences", methods=["GET", "POST"])
 def api_preferences():
-    """get or save user preferences."""
-    prefs_path = os.path.join(os.path.dirname(__file__), "user_prefs.yaml")
-
+    """load or persist global preference defaults."""
     if request.method == "GET":
         try:
-            with open(prefs_path, "r", encoding="utf-8") as f:
-                prefs = yaml.safe_load(f) or {}
-            prefs.setdefault("keywords", [])
-            prefs.setdefault("authors", [])
-            prefs.setdefault("min_score", 1.0)
-            prefs.setdefault("categories", ["astro-ph"])
-            return jsonify(prefs)
-        except Exception as e:
-            print(f"[api/preferences] error loading prefs: {e}")
+            config = PreferenceConfig.query.first()
+            if config is None:
+                config = PreferenceConfig()
+                db.session.add(config)
+                db.session.commit()
+            return jsonify(config.as_dict())
+        except Exception as exc:  # pragma: no cover
+            print(f"[api/preferences] error loading prefs: {exc}")
             return jsonify({}), 500
 
-    # post — save preferences
+    # POST: save preferences
     try:
-        data = request.get_json(force=True)
-        prefs = {
-            "keywords": data.get("keywords", []),
-            "authors": data.get("authors", []),
-            "min_score": data.get("min_score", 1.0),
-            "categories": data.get("categories", ["astro-ph"]),
-        }
-        with open(prefs_path, "w", encoding="utf-8") as f:
-            yaml.safe_dump(prefs, f, sort_keys=False)
+        data = request.get_json(force=True) or {}
+        config = PreferenceConfig.query.first()
+        if config is None:
+            config = PreferenceConfig()
+            db.session.add(config)
 
-        print("[api/preferences] preferences saved:", prefs)
-        return jsonify({"status": "ok"})
-    except Exception as e:
-        print(f"[api/preferences] error saving prefs: {e}")
-        return jsonify({"error": str(e)}), 500
+        config.keywords = data.get("keywords") or []
+        config.authors = data.get("authors") or []
+        config.categories = data.get("categories") or ["astro-ph"]
+        config.min_score = data.get("min_score", 1.0) or 1.0
+
+        db.session.commit()
+        payload = config.as_dict()
+        print("[api/preferences] preferences saved:", payload)
+        return jsonify({"status": "ok", "preferences": payload})
+    except Exception as exc:  # pragma: no cover
+        db.session.rollback()
+        print(f"[api/preferences] error saving prefs: {exc}")
+        return jsonify({"error": str(exc)}), 500

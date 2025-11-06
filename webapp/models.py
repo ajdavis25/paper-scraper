@@ -89,3 +89,21 @@ class UserPreference(db.Model, TimestampMixin):
     __table_args__ = (
         db.UniqueConstraint("user_id", "paper_id", name="uq_user_paper"),
     )
+
+
+class PreferenceConfig(db.Model):
+    __tablename__ = "preference_config"
+
+    id = db.Column(db.Integer, primary_key=True)
+    keywords = db.Column(db.JSON, default=list)
+    authors = db.Column(db.JSON, default=list)
+    categories = db.Column(db.JSON, default=list)
+    min_score = db.Column(db.Float, default=1.0)
+
+    def as_dict(self):
+        return {
+            "keywords": self.keywords or [],
+            "authors": self.authors or [],
+            "categories": self.categories or ["astro-ph"],
+            "min_score": self.min_score if self.min_score is not None else 1.0,
+        }
