@@ -2,6 +2,7 @@ import re, os, yaml, feedparser, requests, datetime as dt
 from filters import score_paper, match_category
 from mailer import send_email
 from curator import merge_preferences
+from shared.utils import wrap_inline_tex
 
 print(f"[astro-ph bot] running: {__file__} SHA={os.environ.get('GITHUB_SHA', 'local')}")
 
@@ -138,9 +139,11 @@ def fetch_recent(cfg):
         m = _ARXIV_ID_RE.search(entry_id) or _ARXIV_ID_RE.search(getattr(entry, "link", ""))
         arxiv_id = (m.group(1) + (m.group(2) or "")) if m else ""
 
+        summary_text = entry.summary.strip()
+        summary_text = wrap_inline_tex(summary_text)
         results.append({
             "title": entry.title.strip(),
-            "summary": entry.summary.strip(),
+            "summary": summary_text,
             "published": pub,
             "link": getattr(entry, "link", ""),
             "id": entry_id,
