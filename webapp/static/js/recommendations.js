@@ -19,6 +19,14 @@ document.addEventListener("click", (e) => {
 });
 
 
+// render latex after page load
+document.addEventListener("DOMContentLoaded", () => {
+  if (window.MathJax?.typesetPromise) {
+    MathJax.typesetPromise();
+  }
+});
+
+
 // main async sender
 async function sendReaction({ title, link, liked, btn, paperDiv }) {
   btn.disabled = true;
