@@ -10,7 +10,7 @@ _root_str = str(_project_root)
 if _root_str not in sys.path:
     sys.path.insert(0, _root_str)
 
-from shared.db import db, init_app as init_db
+from shared.db import db
 from shared.mail import mail
 
 _app_instance = None
@@ -22,11 +22,19 @@ def create_app():
         return _app_instance
 
     app = Flask(__name__)
+    
     app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev-secret-key")
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
-    # let shared/db.py handle DATABASE_URL vs. writable temp fallback
-    init_db(app)
+    if os.getenv("DATABASE_URL"):
+        app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv("DATABASE_URL")
+    else:
+        # on vercel, the code directory is read-only — /tmp is writable.
+        db_filename = "feedback.db"
+        db_path = os.path.join("/tmp", db_filename)
+        app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{db_path}"
+
+    db.init_app(app)
     mail.init_app(app)
 
     from .models import User, Paper, UserPreference, Subscriber, Feedback
