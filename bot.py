@@ -152,6 +152,34 @@ def fetch_recent(cfg):
     return results
 
 
+def load_db_recipients():
+    """fetch user emails from the database, if available."""
+    try:
+        from webapp import create_app
+        from webapp.models import User
+    except Exception as exc:
+        print(f"[astro-ph bot] skipping db recipients (import error: {exc})")
+        return []
+
+    try:
+        app = create_app()
+        with app.app_context():
+            emails = [
+                (email or "").strip().lower()
+                for (email,) in User.query.with_entities(User.email).all()
+            ]
+    except Exception as exc:
+        print(f"[astro-ph bot] skipping db recipients (db error: {exc})")
+        return []
+
+    emails = [e for e in emails if e]
+    if emails:
+        print(f"[astro-ph bot] loaded {len(emails)} email(s) from database.")
+    else:
+        print("[astro-ph bot] no recipient emails found in database.")
+    return emails
+
+
 def curate(cfg, results):
     curated = []
     prefs = cfg["preferences"]
@@ -306,6 +334,12 @@ def main():
         test_addr = cfg.get("test_recipient", "ashton.davis3@my.utsa.edu")
         print(f"[astro-ph bot] TEST MODE ENABLED — will only send to {test_addr}")
         cfg["output"]["email"]["to_addrs"] = [test_addr]
+    else:
+        existing = cfg.get("output", {}).get("email", {}).get("to_addrs", [])
+        db_recipients = load_db_recipients()
+        combined = sorted({*(addr.strip().lower() for addr in existing if addr), *db_recipients})
+        if combined:
+            cfg["output"]["email"]["to_addrs"] = combined
 
     # where your flask app is serving the /like endpoint
     track_base = (
