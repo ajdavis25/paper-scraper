@@ -1,12 +1,17 @@
 import yaml
+from pathlib import Path
+
+_BASE_DIR = Path(__file__).resolve().parent
+_DEFAULTS_PATH = _BASE_DIR / "defaults.yaml"
 
 
 def load_yaml(path):
-    with open(path, "r", encoding="utf-8") as f:
+    path = Path(path)
+    with path.open("r", encoding="utf-8") as f:
         return yaml.safe_load(f)
 
 
-def merge_preferences(user_prefs, defaults_path="defaults.yaml"):
+def merge_preferences(user_prefs, defaults_path=_DEFAULTS_PATH):
     defaults = load_yaml(defaults_path)
     merged = {}
 
