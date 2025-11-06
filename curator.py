@@ -7,12 +7,15 @@ _DEFAULTS_PATH = _BASE_DIR / "defaults.yaml"
 
 def load_yaml(path):
     path = Path(path)
+    if not path.is_file():
+        return {}
     with path.open("r", encoding="utf-8") as f:
-        return yaml.safe_load(f)
+        return yaml.safe_load(f) or {}
 
 
 def merge_preferences(user_prefs, defaults_path=_DEFAULTS_PATH):
-    defaults = load_yaml(defaults_path)
+    defaults_path = Path(defaults_path)
+    defaults = load_yaml(defaults_path) if defaults_path.is_file() else {}
     merged = {}
 
     # merge list-like keys safely
