@@ -90,6 +90,7 @@ def subscribe():
 
     return render_template("subscribe.html")
 
+
 @frontend.route("/unsubscribe", methods=["GET", "POST"])
 def unsubscribe():
     if request.method == "POST":

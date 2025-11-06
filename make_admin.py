@@ -1,67 +1,85 @@
 #!/usr/bin/env python3
 """
-promote a user to admin status in the current database.
-
-usage:
-    python make_admin.py user@example.com
-    python make_admin.py user@example.com --database-url postgresql+psycopg://...
+promote a user to admin status in the configured database.
+usage: python make_admin.py user@example.com
 """
-import argparse
+
 import os
 import sys
 
-from dotenv import load_dotenv
-from sqlalchemy import func
+from sqlalchemy import text
 
-from webapp import create_app
-from webapp.models import User
-from shared.db import db
+try:
+    from dotenv import load_dotenv
+except ImportError:
+    load_dotenv = None
 
 
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Promote an existing user to admin.")
-    parser.add_argument("email", help="Email address of the user to promote")
-    parser.add_argument(
-        "--database-url",
-        help="Override DATABASE_URL for this run (defaults to environment/.env)",
-    )
-    return parser.parse_args()
+def normalize_url(url: str) -> str:
+    if not url:
+        return ""
+
+    # handle accidental "DATABASE_URL=" prefix in .env values
+    if url.startswith("DATABASE_URL="):
+        url = url.split("DATABASE_URL=", 1)[1]
+
+    if url.startswith("postgres://"):
+        url = "postgresql+psycopg://" + url[len("postgres://") :]
+    elif url.startswith("postgresql://"):
+        url = "postgresql+psycopg://" + url[len("postgresql://") :]
+
+    if "sslmode=" not in url:
+        separator = "&" if "?" in url else "?"
+        url = f"{url}{separator}sslmode=require"
+
+    return url
 
 
 def main():
-    load_dotenv()
-    args = parse_args()
+    if load_dotenv:
+        load_dotenv()
 
-    target_email = args.email.strip().lower()
-    if not target_email:
-        print("please provide a valid email address.", file=sys.stderr)
+    if len(sys.argv) != 2:
+        print("usage: python make_admin.py user@example.com", file=sys.stderr)
         sys.exit(1)
 
-    if args.database_url:
-        os.environ["DATABASE_URL"] = args.database_url
+    target_email = sys.argv[1].strip().lower()
+    if not target_email:
+        print("provide a valid email.", file=sys.stderr)
+        sys.exit(1)
 
-    app = create_app()
+    raw_url = os.getenv("DATABASE_URL")
+    if not raw_url:
+        print("DATABASE_URL is not set. configure your Neon SQLAlchemy string.", file=sys.stderr)
+        sys.exit(1)
 
-    with app.app_context():
-        print(f"[make_admin] using database: {app.config.get('SQLALCHEMY_DATABASE_URI')}")
-        user = User.query.filter(func.lower(User.email) == target_email).first()
+    database_url = normalize_url(raw_url)
+    if "pooler" not in database_url:
+        print("warning: connection string does not include 'pooler'. Neon recommends using the pooled endpoint.")
 
-        if not user:
-            print(f"no user found with email '{target_email}'.")
-            sys.exit(1)
+    try:
+        from sqlalchemy import create_engine
 
-        if user.is_admin:
-            print(f"{user.email} is already an admin.")
-            return
+        engine = create_engine(database_url, future=True)
+    except Exception as exc:  # pragma: no cover
+        print(f"failed to create SQLAlchemy engine: {exc}", file=sys.stderr)
+        sys.exit(1)
 
-        try:
-            user.is_admin = True
-            db.session.commit()
-            print(f"{user.email} is now an admin!")
-        except Exception as exc:  # pragma: no cover
-            db.session.rollback()
-            print(f"failed to update admin status: {exc}", file=sys.stderr)
-            sys.exit(1)
+    print(f"[make_admin] using database: {database_url}")
+
+    stmt = text("UPDATE public.user SET is_admin = TRUE WHERE lower(email) = :email RETURNING email")
+
+    try:
+        with engine.begin() as conn:
+            result = conn.execute(stmt, {"email": target_email}).fetchone()
+            if result:
+                print(f"{result.email} is now an admin!")
+            else:
+                print(f"no user found with email '{target_email}'.")
+                sys.exit(1)
+    except Exception as exc:  # pragma: no cover
+        print(f"failed to update admin flag: {exc}", file=sys.stderr)
+        sys.exit(1)
 
 
 if __name__ == "__main__":
