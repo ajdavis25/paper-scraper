@@ -1,29 +1,45 @@
 # shared/db.py
 """
-database initialization helpers and uri resolution.
+database helper utilities for resolving a usable SQLAlchemy connection URI.
+
+the goals:
+  * respect an explicitly configured `DATABASE_URL`.
+  * normalize Neon/Postgres URLs so SQLAlchemy uses the `psycopg` driver and
+    enforces SSL (Neon requires it).
+  * when the URL points at SQLite, make sure the target location is writable,
+    falling back to `/tmp/feedback.db` on read-only deployments.
+  * maintain backwards compatibility with the previous `init_app(app)` call
+    pattern used by `webapp/__init__.py`.
 """
+
+from __future__ import annotations
+
 import os
 import sqlite3
 import tempfile
 from contextlib import suppress
 from pathlib import Path
 from typing import Optional
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
+
 from flask_sqlalchemy import SQLAlchemy
 
 db = SQLAlchemy()
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 _DEFAULT_SQLITE_NAME = "feedback.db"
+_SQLITE_PREFIX = "sqlite:///"
+_POSTGRES_SCHEMES = {"postgresql", "postgres", "postgresql+psycopg"}
 
 
 def _sqlite_uri_for(path: Path) -> str:
     return f"sqlite:///{path.as_posix()}"
 
 
-def _usable_sqlite_path(path: Path) -> Optional[Path]:
+def _ensure_sqlite_path(path: Path) -> Optional[Path]:
     """
-    ensure a sqlite database can be created at `path`.
-    returns the path on success, otherwise None.
+    attempt to create a SQLite file (or at least its parent directory).
+    return the resolved path on success, or None if we cannot write there.
     """
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -40,55 +56,90 @@ def _usable_sqlite_path(path: Path) -> Optional[Path]:
             conn.close()
         return path
     except sqlite3.OperationalError as exc:
-        print(f"[db] warning: sqlite path {path} not writable: {exc}")
+        print(f"[db] warning: SQLite path {path} not writable: {exc}")
         with suppress(FileNotFoundError):
             path.unlink()
-        return None
-    except Exception as exc:  # pragma: no cover - defensive
-        print(f"[db] warning: unexpected sqlite error at {path}: {exc}")
+    except Exception as exc:  # pragma: no cover - defensive guard
+        print(f"[db] warning: unexpected SQLite error at {path}: {exc}")
         with suppress(FileNotFoundError):
             path.unlink()
-        return None
+    return None
+
+
+def _fallback_sqlite_uri() -> str:
+    tmp_path = (Path(tempfile.gettempdir()) / _DEFAULT_SQLITE_NAME).resolve()
+    usable = _ensure_sqlite_path(tmp_path)
+    if not usable:
+        raise RuntimeError("cannot obtain a writable SQLite database location.")
+    print(f"[db] using temporary sqlite database at {usable}")
+    return _sqlite_uri_for(usable)
+
+
+def _normalize_postgres_uri(uri: str) -> str:
+    """
+    convert postgres:// URIs to the SQLAlchemy preferred form:
+      - ensure scheme is `postgresql+psycopg`
+      - ensure `sslmode=require` is present (Neon mandates TLS)
+    """
+    parsed = urlparse(uri)
+    scheme = parsed.scheme.lower()
+    if scheme not in _POSTGRES_SCHEMES:
+        return uri
+
+    new_scheme = "postgresql+psycopg"
+    query_pairs = dict(parse_qsl(parsed.query, keep_blank_values=True))
+    query_pairs.setdefault("sslmode", "require")
+    new_query = urlencode(query_pairs)
+
+    normalized = urlunparse(
+        (
+            new_scheme,
+            parsed.netloc,
+            parsed.path or "",
+            "",  # params (deprecated in URLs, unused here)
+            new_query,
+            parsed.fragment or "",
+        )
+    )
+    return normalized
 
 
 def resolve_database_uri(candidate: Optional[str] = None) -> str:
     """
-    determine a usable sqlalchemy database uri, preferring configured values and
-    falling back to a writable temporary sqlite file.
+    decide on the best database URI to use.
     """
     uri = candidate or os.getenv("DATABASE_URL")
     if uri:
-        if uri.startswith("sqlite:///"):
-            raw_path = uri[len("sqlite:///") :]
+        if uri.startswith(_SQLITE_PREFIX):
+            raw_path = uri[len(_SQLITE_PREFIX) :]
             path = Path(raw_path)
             if not path.is_absolute():
                 path = (_PROJECT_ROOT / path).resolve()
-            usable = _usable_sqlite_path(path)
+            usable = _ensure_sqlite_path(path)
             if usable:
                 return _sqlite_uri_for(usable)
             print(f"[db] warning: falling back to temporary sqlite storage for {path}")
-            tmp_path = (Path(tempfile.gettempdir()) / _DEFAULT_SQLITE_NAME).resolve()
-            usable_tmp = _usable_sqlite_path(tmp_path)
-            if not usable_tmp:
-                raise RuntimeError("cannot obtain a writable sqlite database location.")
-            return _sqlite_uri_for(usable_tmp)
+            return _fallback_sqlite_uri()
+
+        # normalize postgres URIs (Neon etc.)
+        parsed_scheme = urlparse(uri).scheme.lower()
+        if parsed_scheme in _POSTGRES_SCHEMES:
+            return _normalize_postgres_uri(uri)
+
+        # non-sqlite DBs (MySQL, etc.) are returned as-is.
         return uri
 
+    # no DATABASE_URL provided – mimic the legacy behaviour.
     instance_path = (_PROJECT_ROOT / "instance" / _DEFAULT_SQLITE_NAME).resolve()
-    usable_instance = _usable_sqlite_path(instance_path)
+    usable_instance = _ensure_sqlite_path(instance_path)
     if usable_instance:
         return _sqlite_uri_for(usable_instance)
 
-    tmp_path = (Path(tempfile.gettempdir()) / _DEFAULT_SQLITE_NAME).resolve()
-    usable_tmp = _usable_sqlite_path(tmp_path)
-    if not usable_tmp:
-        raise RuntimeError("cannot obtain a writable sqlite database location.")
-    print(f"[db] using temporary sqlite database at {tmp_path}")
-    return _sqlite_uri_for(usable_tmp)
+    return _fallback_sqlite_uri()
 
 
 def init_app(app):
-    """attach sqlalchemy to the flask app, supplying a writable uri when needed."""
+    """attach SQLAlchemy to the flask app, supplying a usable URI."""
     resolved = resolve_database_uri(app.config.get("SQLALCHEMY_DATABASE_URI"))
     app.config["SQLALCHEMY_DATABASE_URI"] = resolved
     app.config.setdefault("SQLALCHEMY_TRACK_MODIFICATIONS", False)
