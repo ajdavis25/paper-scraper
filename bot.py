@@ -281,11 +281,23 @@ def render_paper_entry_html(paper, user_email, track_base):
     authors_line = ", ".join(authors) if isinstance(authors, list) else str(authors)
     like_link = f"{track_base}/like?email={user_email}&arxiv_id={arxiv_id}&liked=true"
     dislike_link = f"{track_base}/like?email={user_email}&arxiv_id={arxiv_id}&liked=false"
+    category = paper.get("category")
+    score = paper.get("score")
+    published = paper.get("published")
 
     parts = [
         "<li>",
         f'<p><b><a href="{link}">{title}</a></b></p>',
     ]
+    meta_bits = []
+    if category:
+        meta_bits.append(f"<span class='category-tag'>{category}</span>")
+    if score is not None:
+        meta_bits.append(f"<span class='score-tag'>score: {score}</span>")
+    if published:
+        meta_bits.append(f"<span class='date'>{published}</span>")
+    if meta_bits:
+        parts.append("<p>" + " ".join(meta_bits) + "</p>")
     if authors_line:
         parts.append(f"<p><i>{authors_line}</i></p>")
     if paper.get("summary"):
@@ -306,9 +318,21 @@ def render_paper_entry_text(paper, user_email, track_base):
     authors_line = ", ".join(authors) if isinstance(authors, list) else str(authors)
     like_link = f"{track_base}/like?email={user_email}&arxiv_id={arxiv_id}&liked=true"
     dislike_link = f"{track_base}/like?email={user_email}&arxiv_id={arxiv_id}&liked=false"
+    category = paper.get("category")
+    score = paper.get("score")
+    published = paper.get("published")
 
     lines = []
     lines.append(f"{title}\n{link}\n")
+    if category or score is not None or published:
+        meta = []
+        if category:
+            meta.append(f"category: {category}")
+        if score is not None:
+            meta.append(f"score: {score}")
+        if published:
+            meta.append(f"published: {published}")
+        lines.append("; ".join(meta) + "\n")
     if authors_line:
         lines.append(f"authors: {authors_line}\n")
     if paper.get("summary"):

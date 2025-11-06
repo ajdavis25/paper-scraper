@@ -337,7 +337,7 @@ def recommendations():
         query = "+OR+".join(encoded_terms) + f"+AND+cat:{quote_plus(cat)}"
         url = (
             "https://export.arxiv.org/api/query?"
-            f"search_query={query}&start=0&max_results=10&sortBy=submittedDate&sortOrder=descending"
+            f"search_query={query}&start=0&max_results=25&sortBy=relevance&sortOrder=descending"
         )
         print(f"[recommendations] fetching from {cat}: {url}")
 
@@ -438,7 +438,10 @@ def recommendation_feedback():
             name="system",
             email=email,
             message=f"reaction {'like' if liked else 'dislike'} for {arxiv_id}",
-            type="recommendation"
+            type="recommendation",
+            arxiv_id=arxiv_id,
+            liked=liked,
+            source="recommendations",
         )
         db.session.add(fb_entry)
         db.session.commit()
