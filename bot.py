@@ -2,7 +2,7 @@ import re, os, yaml, feedparser, requests, datetime as dt
 from filters import score_paper, match_category
 from mailer import send_email
 from curator import merge_preferences
-from shared.utils import wrap_inline_tex
+from shared.utils import wrap_inline_tex, render_inline_math_html, get_katex_css
 
 print(f"[astro-ph bot] running: {__file__} SHA={os.environ.get('GITHUB_SHA', 'local')}")
 
@@ -305,14 +305,17 @@ def render_paper_entry_html(paper, user_email, track_base):
     if authors_line:
         parts.append(f"<p><i>{authors_line}</i></p>")
     if paper.get("summary"):
-        parts.append(f"<p>{paper['summary']}</p>")
+        summary_html, has_math = render_inline_math_html(paper["summary"])
+        parts.append(f"<p>{summary_html}</p>")
+    else:
+        has_math = False
 
     parts.append(
         f"<p><a href='{like_link}'>👍 like</a> | <a href='{dislike_link}'>👎 dislike</a></p>"
     )
     parts.append("</li>")
 
-    return "\n".join(parts)
+    return "\n".join(parts), has_math
 
 
 def render_paper_entry_text(paper, user_email, track_base):
@@ -362,14 +365,30 @@ def make_email_body_for_recipient(user_email, curated, track_base):
     so the like/dislike links embed their email.
     """
     text_blocks = []
-    html_blocks = ['<html><body><h2>astro-ph digest</h2><ol>']
+    html_entries = []
+    needs_math_css = False
 
     for p in curated:
         text_blocks.append(render_paper_entry_text(p, user_email, track_base))
-        html_blocks.append(render_paper_entry_html(p, user_email, track_base))
+        entry_html, entry_math = render_paper_entry_html(p, user_email, track_base)
+        html_entries.append(entry_html)
+        needs_math_css = needs_math_css or entry_math
 
-    html_blocks.append("</ol></body></html>")
-    return "\n".join(text_blocks), "\n".join(html_blocks)
+    style_block = ""
+    if needs_math_css:
+        css = get_katex_css()
+        if css:
+            style_block = f"<style>{css}\n.math-inline {{ display: inline-block; }}</style>"
+
+    html_body = (
+        "<html><head>"
+        f"{style_block}"
+        "</head><body><h2>astro-ph digest</h2><ol>"
+        + "\n".join(html_entries)
+        + "</ol></body></html>"
+    )
+
+    return "\n".join(text_blocks), html_body
 
 
 def main():

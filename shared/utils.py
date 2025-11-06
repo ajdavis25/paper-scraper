@@ -5,9 +5,13 @@ general-purpose helpers for astro-ph digest.
 from __future__ import annotations
 
 import re
+import warnings
 import yaml
 import requests
 import xml.etree.ElementTree as ET
+from functools import lru_cache
+from pathlib import Path
+from typing import Tuple
 
 
 # ---------------------------------------------------------------------------
@@ -56,6 +60,44 @@ _ARG_FIX_RE = re.compile(
     r"(?!\s*\{)\s*"
     r"(?P<arg>(?:\\[A-Za-z]+(?:\{[^}]+\})?)|[A-Za-z0-9])"
 )
+_INLINE_MATH_RE = re.compile(r"(?<!\\)\$(.+?)(?<!\\)\$")
+
+
+@lru_cache(maxsize=1)
+def _get_katex_context():
+    try:
+        warnings.filterwarnings(
+            "ignore",
+            message="pkg_resources is deprecated as an API",
+            module="py_mini_racer.py_mini_racer",
+        )
+        from py_mini_racer import py_mini_racer  # type: ignore
+    except Exception as exc:
+        print(f"[render_inline_math_html] py-mini-racer unavailable: {exc}")
+        return None
+
+    js_path = Path(__file__).resolve().parent / "katex.min.js"
+    if not js_path.exists():
+        print(f"[render_inline_math_html] missing KaTeX JS asset at {js_path}")
+        return None
+
+    try:
+        ctx = py_mini_racer.MiniRacer()
+        ctx.eval(
+            "var module = {exports:{}};"
+            "var exports = module.exports;"
+            "var window = {};"
+            "var document = {createElement: function(){return {style:{}};}};"
+            "var self = window;"
+            "var globalThis = window;"
+        )
+        ctx.eval(js_path.read_text(encoding="utf-8"))
+        ctx.eval("var katex = module.exports;")
+        ctx.eval("function __katex_render(expr, options){ return katex.renderToString(expr, options); }")
+        return ctx
+    except Exception as exc:
+        print(f"[render_inline_math_html] failed to initialize KaTeX context: {exc}")
+        return None
 
 
 def wrap_inline_tex(text: str) -> str:
@@ -159,6 +201,47 @@ def wrap_inline_tex(text: str) -> str:
 
     wrapped = "".join(out).replace("$ $", "$")
     return wrapped
+
+
+def render_inline_math_html(text: str) -> Tuple[str, bool]:
+    """
+    Convert inline math ($...$) to KaTeX HTML spans suitable for email clients.
+    Returns (processed_html, math_found).
+    """
+    if not text or "$" not in text:
+        return text, False
+
+    ctx = _get_katex_context()
+    if ctx is None:
+        return text, False
+
+    math_found = False
+
+    def repl(match: re.Match[str]) -> str:
+        nonlocal math_found
+        expr = match.group(1)
+        try:
+            html = ctx.call("__katex_render", expr, {"throwOnError": False})
+            math_found = True
+            return f"<span class=\"math-inline\">{html}</span>"
+        except Exception as err:
+            print(f"[render_inline_math_html] failed to render '{expr}': {err}")
+            return match.group(0)
+
+    return _INLINE_MATH_RE.sub(repl, text), math_found
+
+
+@lru_cache(maxsize=1)
+def get_katex_css() -> str:
+    """
+    Load the bundled KaTeX CSS used when rendering math in HTML emails.
+    """
+    css_path = Path(__file__).resolve().parent / "katex_email.css"
+    try:
+        return css_path.read_text(encoding="utf-8")
+    except Exception as exc:
+        print(f"[get_katex_css] unable to read KaTeX CSS: {exc}")
+        return ""
 
 
 def fetch_arxiv_feed(url):
