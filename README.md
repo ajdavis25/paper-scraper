@@ -29,7 +29,7 @@ it includes:
 
 ### REPO STRUCTURE
 ```text
-astroph-bot/
+paper_scraper/
 ├── .env                             # environment variables (api keys, credentials, gmail app password, etc.)
 ├── .github/workflows/               # github actions for automation
 │   ├── check_subscriptions.yml      # validates and cleans up subscriber list on schedule
