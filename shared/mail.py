@@ -85,11 +85,11 @@ def send_email(cfg, subject, text, html=None):
         msg["from"] = from_addr
         msg["to"] = ", ".join(to_addrs)
 
-        part1 = MIMEText(text, "plain")
+        part1 = MIMEText(text, "plain", "utf-8")
         msg.attach(part1)
 
         if html:
-            part2 = MIMEText(html, "html")
+            part2 = MIMEText(html, "html", "utf-8")
             msg.attach(part2)
 
         # send email
