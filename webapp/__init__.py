@@ -1,8 +1,6 @@
 from flask import Flask
 from flask_login import LoginManager
-import os
-import sys
-import tempfile
+import os, sys
 from pathlib import Path
 
 # ensure the project root (containing `webapp` and `shared`) is importable
@@ -12,19 +10,10 @@ _root_str = str(_project_root)
 if _root_str not in sys.path:
     sys.path.insert(0, _root_str)
 
-from shared.db import db, resolve_database_uri
+from shared.db import db
 from shared.mail import mail
 
 _app_instance = None
-_FALLBACK_SQLITE_NAME = "feedback.db"
-
-
-def _fallback_sqlite_uri() -> str:
-    """
-    match the previous behaviour precisely: pick /tmp/feedback.db on read-only deployments.
-    """
-    db_path = Path(tempfile.gettempdir()) / _FALLBACK_SQLITE_NAME
-    return f"sqlite:///{db_path.as_posix()}"
 
 
 def create_app():
@@ -33,14 +22,17 @@ def create_app():
         return _app_instance
 
     app = Flask(__name__)
+    
     app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev-secret-key")
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
-    env_uri = os.getenv("DATABASE_URL")
-    if env_uri:
-        app.config["SQLALCHEMY_DATABASE_URI"] = resolve_database_uri(env_uri)
+    if os.getenv("DATABASE_URL"):
+        app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv("DATABASE_URL")
     else:
-        app.config["SQLALCHEMY_DATABASE_URI"] = _fallback_sqlite_uri()
+        # on vercel, the code directory is read-only — /tmp is writable.
+        db_filename = "feedback.db"
+        db_path = os.path.join("/tmp", db_filename)
+        app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{db_path}"
 
     db.init_app(app)
     mail.init_app(app)
@@ -61,13 +53,7 @@ def create_app():
     app.register_blueprint(backend, url_prefix="/api")
 
     with app.app_context():
-        try:
-            db.create_all()
-        except Exception as exc:  # pragma: no cover
-            import traceback
-            print("[startup] db.create_all() failed:", exc, file=sys.stderr)
-            traceback.print_exc()
-            raise
+        db.create_all()
 
     _app_instance = app
     return app
