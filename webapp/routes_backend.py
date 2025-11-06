@@ -4,7 +4,7 @@ routes_backend.py — backend routes for astro-ph digest
 """
 import os, yaml
 from flask import Blueprint, request, jsonify
-from astroph_bot.shared.db import db
+from shared.db import db
 
 backend = Blueprint("backend", __name__)
 

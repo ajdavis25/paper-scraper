@@ -68,7 +68,7 @@ def fetch_arxiv_feed(url):
 def get_user_by_email(email):
     """fetch user by email, or return None."""
     # import here to avoid circular import at module import time
-    from astroph_bot.webapp.models import User
+    from webapp.models import User
 
     if not email:
         return None

@@ -2,7 +2,7 @@
 """models.py — ORM models for astro-ph digest backend."""
 from datetime import datetime
 from flask_login import UserMixin
-from astroph_bot.shared.db import db
+from shared.db import db
 
 # ---------------------------------------------------------------------------
 # mixins

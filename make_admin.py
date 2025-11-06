@@ -1,5 +1,5 @@
-from astroph_bot.webapp import create_app
-from astroph_bot.webapp.models import db, User
+from webapp import create_app
+from webapp.models import db, User
 
 app = create_app()
 

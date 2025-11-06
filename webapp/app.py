@@ -21,7 +21,7 @@ print("ENV VARS LOADED:", list(os.environ.keys()), file=sys.stderr)
 # ----------------------------------------------------------
 try:
     # use the absolute import - not relative
-    from astroph_bot.webapp import create_app
+    from webapp import create_app
 
     app = create_app()
     application = app  # for vercel / wsgi compatibility
@@ -29,7 +29,7 @@ try:
     # ==========================================================
     # DEBUG: print all registered SQLAlchemy model classes (2.x API)
     # ==========================================================
-    from astroph_bot.shared.db import db
+    from shared.db import db
 
     print("\n=== SQLAlchemy registered model classes ===", file=sys.stderr)
     try:

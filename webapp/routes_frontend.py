@@ -4,10 +4,10 @@ from flask_login import current_user, login_required, login_user, logout_user
 from werkzeug.security import generate_password_hash, check_password_hash
 from itsdangerous import SignatureExpired, BadSignature
 
-from astroph_bot.shared.db import db
-from astroph_bot.webapp.models import User, Paper, UserPreference, Subscriber, Feedback
-from astroph_bot.shared.utils import get_user_by_email
-from astroph_bot.shared.mail import send_reset_email, get_serializer, send_email
+from shared.db import db
+from webapp.models import User, Paper, UserPreference, Subscriber, Feedback
+from shared.utils import get_user_by_email
+from shared.mail import send_reset_email, get_serializer, send_email
 import os
 
 frontend = Blueprint("frontend", __name__)
@@ -297,7 +297,7 @@ def recommendations():
     """
     import yaml
     from urllib.parse import quote_plus
-    from astroph_bot.shared.utils import fetch_arxiv_feed
+    from shared.utils import fetch_arxiv_feed
 
     prefs_path = os.path.join(os.path.dirname(__file__), "user_prefs.yaml")
 

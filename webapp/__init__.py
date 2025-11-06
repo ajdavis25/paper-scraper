@@ -1,19 +1,18 @@
 from flask import Flask
 from flask_login import LoginManager
-import os, sys
+import os
+import sys
 from pathlib import Path
 
-# ensure the parent directory that holds the ``astroph_bot`` package is importable
+# ensure the project root (containing `webapp` and `shared`) is importable
 _here = Path(__file__).resolve()
-_package_root = _here.parents[1]          # .../astroph_bot
-_package_parent = _package_root.parent    # directory that contains /astroph_bot
+_project_root = _here.parent.parent
+_root_str = str(_project_root)
+if _root_str not in sys.path:
+    sys.path.insert(0, _root_str)
 
-candidate = str(_package_parent)
-if candidate not in sys.path:
-    sys.path.insert(0, candidate)
-
-from astroph_bot.shared.db import db
-from astroph_bot.shared.mail import mail
+from shared.db import db
+from shared.mail import mail
 
 _app_instance = None
 
@@ -33,7 +32,7 @@ def create_app():
     mail.init_app(app)
 
     # import models after initializing db
-    from astroph_bot.webapp.models import User, Paper, UserPreference, Subscriber, Feedback
+    from .models import User, Paper, UserPreference, Subscriber, Feedback
 
     login_manager = LoginManager()
     login_manager.login_view = "frontend.login"
@@ -44,8 +43,8 @@ def create_app():
         return User.query.filter_by(email=user_email).first()
 
     # register blueprints after models are imported
-    from astroph_bot.webapp.routes_frontend import frontend
-    from astroph_bot.webapp.routes_backend import backend
+    from .routes_frontend import frontend
+    from .routes_backend import backend
     app.register_blueprint(frontend)
     app.register_blueprint(backend, url_prefix="/api")
 
