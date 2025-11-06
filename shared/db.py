@@ -2,8 +2,10 @@
 """
 database initialization helpers and uri resolution.
 """
-import os, tempfile
+import os
+import tempfile
 from pathlib import Path
+from typing import Optional
 from flask_sqlalchemy import SQLAlchemy
 
 db = SQLAlchemy()
@@ -16,7 +18,7 @@ def _sqlite_uri_for(path: Path) -> str:
     return f"sqlite:///{path.as_posix()}"
 
 
-def resolve_database_uri(candidate: str | None = None) -> str:
+def resolve_database_uri(candidate: Optional[str] = None) -> str:
     """
     determine a usable sqlalchemy database uri.
 
