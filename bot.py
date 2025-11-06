@@ -2,7 +2,7 @@ import re, os, yaml, feedparser, requests, datetime as dt
 from filters import score_paper, match_category
 from mailer import send_email
 from curator import merge_preferences
-from shared.utils import wrap_inline_tex, render_inline_math_html, get_katex_css
+from shared.utils import wrap_inline_tex, render_inline_math_html
 
 print(f"[astro-ph bot] running: {__file__} SHA={os.environ.get('GITHUB_SHA', 'local')}")
 
@@ -366,19 +366,15 @@ def make_email_body_for_recipient(user_email, curated, track_base):
     """
     text_blocks = []
     html_entries = []
-    needs_math_css = False
+    found_math = False
 
     for p in curated:
         text_blocks.append(render_paper_entry_text(p, user_email, track_base))
         entry_html, entry_math = render_paper_entry_html(p, user_email, track_base)
         html_entries.append(entry_html)
-        needs_math_css = needs_math_css or entry_math
+        found_math = found_math or entry_math
 
-    style_block = ""
-    if needs_math_css:
-        css = get_katex_css()
-        if css:
-            style_block = f"<style>{css}\n.math-inline {{ display: inline-block; }}</style>"
+    style_block = "<style>.math-inline{font-style:italic;}</style>" if found_math else ""
 
     html_body = (
         "<html><head>"

@@ -4,13 +4,11 @@ general-purpose helpers for astro-ph digest.
 """
 from __future__ import annotations
 
+import html
 import re
-import warnings
 import yaml
 import requests
 import xml.etree.ElementTree as ET
-from functools import lru_cache
-from pathlib import Path
 from typing import Tuple
 
 
@@ -61,43 +59,6 @@ _ARG_FIX_RE = re.compile(
     r"(?P<arg>(?:\\[A-Za-z]+(?:\{[^}]+\})?)|[A-Za-z0-9])"
 )
 _INLINE_MATH_RE = re.compile(r"(?<!\\)\$(.+?)(?<!\\)\$")
-
-
-@lru_cache(maxsize=1)
-def _get_katex_context():
-    try:
-        warnings.filterwarnings(
-            "ignore",
-            message="pkg_resources is deprecated as an API",
-            module="py_mini_racer.py_mini_racer",
-        )
-        from py_mini_racer import py_mini_racer  # type: ignore
-    except Exception as exc:
-        print(f"[render_inline_math_html] py-mini-racer unavailable: {exc}")
-        return None
-
-    js_path = Path(__file__).resolve().parent / "katex.min.js"
-    if not js_path.exists():
-        print(f"[render_inline_math_html] missing KaTeX JS asset at {js_path}")
-        return None
-
-    try:
-        ctx = py_mini_racer.MiniRacer()
-        ctx.eval(
-            "var module = {exports:{}};"
-            "var exports = module.exports;"
-            "var window = {};"
-            "var document = {createElement: function(){return {style:{}};}};"
-            "var self = window;"
-            "var globalThis = window;"
-        )
-        ctx.eval(js_path.read_text(encoding="utf-8"))
-        ctx.eval("var katex = module.exports;")
-        ctx.eval("function __katex_render(expr, options){ return katex.renderToString(expr, options); }")
-        return ctx
-    except Exception as exc:
-        print(f"[render_inline_math_html] failed to initialize KaTeX context: {exc}")
-        return None
 
 
 def wrap_inline_tex(text: str) -> str:
@@ -203,45 +164,288 @@ def wrap_inline_tex(text: str) -> str:
     return wrapped
 
 
+_SUPERSCRIPT_TRANS = str.maketrans(
+    "0123456789+-=()nijkm",
+    "⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻⁼⁽⁾ⁿⁱʲᵏᵐ",
+)
+_SUBSCRIPT_TRANS = str.maketrans(
+    "0123456789+-=()nijkm",
+    "₀₁₂₃₄₅₆₇₈₉₊₋₌₍₎ₙᵢⱼₖₘ",
+)
+
+
+def _to_superscript(text: str) -> str:
+    return text.translate(_SUPERSCRIPT_TRANS)
+
+
+def _to_subscript(text: str) -> str:
+    return text.translate(_SUBSCRIPT_TRANS)
+
+
+LATEX_SYMBOLS = {
+    # greek letters
+    "\\alpha": "α",
+    "\\beta": "β",
+    "\\gamma": "γ",
+    "\\delta": "δ",
+    "\\epsilon": "ε",
+    "\\varepsilon": "ϵ",
+    "\\zeta": "ζ",
+    "\\eta": "η",
+    "\\theta": "θ",
+    "\\vartheta": "ϑ",
+    "\\iota": "ι",
+    "\\kappa": "κ",
+    "\\lambda": "λ",
+    "\\mu": "μ",
+    "\\nu": "ν",
+    "\\xi": "ξ",
+    "\\pi": "π",
+    "\\rho": "ρ",
+    "\\varrho": "ϱ",
+    "\\sigma": "σ",
+    "\\varsigma": "ς",
+    "\\tau": "τ",
+    "\\upsilon": "υ",
+    "\\phi": "φ",
+    "\\varphi": "ϕ",
+    "\\chi": "χ",
+    "\\psi": "ψ",
+    "\\omega": "ω",
+    "\\Gamma": "Γ",
+    "\\Delta": "Δ",
+    "\\Theta": "Θ",
+    "\\Lambda": "Λ",
+    "\\Xi": "Ξ",
+    "\\Pi": "Π",
+    "\\Sigma": "Σ",
+    "\\Upsilon": "Υ",
+    "\\Phi": "Φ",
+    "\\Psi": "Ψ",
+    "\\Omega": "Ω",
+    # relations / symbols
+    "\\pm": "±",
+    "\\mp": "∓",
+    "\\times": "×",
+    "\\cdot": "·",
+    "\\otimes": "⊗",
+    "\\oplus": "⊕",
+    "\\ominus": "⊖",
+    "\\oslash": "⊘",
+    "\\leq": "≤",
+    "\\geq": "≥",
+    "\\neq": "≠",
+    "\\approx": "≈",
+    "\\sim": "∼",
+    "\\simeq": "≃",
+    "\\propto": "∝",
+    "\\infty": "∞",
+    "\\rightarrow": "→",
+    "\\leftarrow": "←",
+    "\\Rightarrow": "⇒",
+    "\\Leftarrow": "⇐",
+    "\\lesssim": "≲",
+    "\\gtrsim": "≳",
+    "\\ll": "≪",
+    "\\gg": "≫",
+    "\\odot": "⊙",
+    "\\oplus": "⊕",
+    "\\degree": "°",
+    "\\deg": "°",
+    "\\partial": "∂",
+    "\\nabla": "∇",
+    "\\cdots": "⋯",
+    "\\ldots": "…",
+    "\\ln": "ln",
+    "\\log": "log",
+    "\\exp": "exp",
+    "\\sin": "sin",
+    "\\cos": "cos",
+    "\\tan": "tan",
+    "\\min": "min",
+    "\\max": "max",
+}
+
+ACCENT_COMBINERS = {
+    "dot": "\u0307",
+    "ddot": "\u0308",
+    "hat": "\u0302",
+    "widehat": "\u0302",
+    "tilde": "\u0303",
+    "widetilde": "\u0303",
+    "bar": "\u0304",
+    "overline": "\u0305",
+    "breve": "\u0306",
+    "check": "\u030C",
+    "acute": "\u0301",
+    "grave": "\u0300",
+    "vec": "\u20D7",
+    "underline": "\u0332",
+}
+
+_SUPERSCRIPT_TRANS = str.maketrans(
+    "0123456789+-=()nijkm",
+    "⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻⁼⁽⁾ⁿⁱʲᵏᵐ",
+)
+_SUBSCRIPT_TRANS = str.maketrans(
+    "0123456789+-=()nijkm",
+    "₀₁₂₃₄₅₆₇₈₉₊₋₌₍₎ₙᵢⱼₖₘ",
+)
+
+
+def _to_superscript(text: str) -> str:
+    return text.translate(_SUPERSCRIPT_TRANS)
+
+
+def _to_subscript(text: str) -> str:
+    return text.translate(_SUBSCRIPT_TRANS)
+
+
+def _read_group(expr: str, idx: int) -> Tuple[str, int]:
+    if idx >= len(expr) or expr[idx] != "{":
+        return "", idx
+    depth = 0
+    buf = []
+    while idx < len(expr):
+        ch = expr[idx]
+        buf.append(ch)
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                idx += 1
+                break
+        idx += 1
+    return "".join(buf)[1:-1], idx
+
+
+def _apply_accent(cmd: str, content: str) -> str:
+    comb = ACCENT_COMBINERS.get(cmd)
+    if not comb:
+        return content
+    return "".join(char + comb for char in content)
+
+
+def latex_to_plain(expr: str) -> str:
+    result = []
+    i = 0
+    length = len(expr)
+
+    text_commands = {
+        "\\mathrm",
+        "\\textrm",
+        "\\text",
+        "\\textbf",
+        "\\textit",
+        "\\operatorname",
+        "\\mathbf",
+        "\\mathcal",
+        "\\mathbb",
+        "\\mathtt",
+        "\\mathit",
+        "\\rm",
+        "\\bf",
+        "\\emph",
+    }
+
+    while i < length:
+        ch = expr[i]
+        if ch == "\\":
+            j = i + 1
+            while j < length and expr[j].isalpha():
+                j += 1
+            cmd = expr[i:j]
+            bare_cmd = cmd.strip("\\")
+
+            if cmd in LATEX_SYMBOLS:
+                result.append(LATEX_SYMBOLS[cmd])
+                i = j
+                continue
+            if bare_cmd in ACCENT_COMBINERS:
+                content, next_idx = _read_group(expr, j)
+                if content:
+                    result.append(_apply_accent(bare_cmd, latex_to_plain(content)))
+                    i = next_idx
+                    continue
+            if cmd == "\\frac":
+                num, after_num = _read_group(expr, j)
+                den, after_den = _read_group(expr, after_num)
+                if num and den:
+                    result.append(f"({latex_to_plain(num)})/({latex_to_plain(den)})")
+                    i = after_den
+                    continue
+            if cmd == "\\sqrt":
+                radicand, next_idx = _read_group(expr, j)
+                if radicand:
+                    result.append(f"√({latex_to_plain(radicand)})")
+                    i = next_idx
+                    continue
+            if cmd in text_commands:
+                content, next_idx = _read_group(expr, j)
+                if content:
+                    result.append(latex_to_plain(content))
+                    i = next_idx
+                    continue
+            if cmd in {"\\left", "\\right"}:
+                i = j
+                continue
+            # unrecognised command: drop backslash and keep text
+            result.append(expr[i + 1 : j])
+            i = j
+            continue
+        elif ch == "^":
+            if i + 1 < length and expr[i + 1] == "{":
+                content, next_idx = _read_group(expr, i + 1)
+                result.append(_to_superscript(latex_to_plain(content)))
+                i = next_idx
+            elif i + 1 < length:
+                result.append(_to_superscript(expr[i + 1]))
+                i += 2
+            else:
+                i += 1
+            continue
+        elif ch == "_":
+            if i + 1 < length and expr[i + 1] == "{":
+                content, next_idx = _read_group(expr, i + 1)
+                result.append(_to_subscript(latex_to_plain(content)))
+                i = next_idx
+            elif i + 1 < length:
+                result.append(_to_subscript(expr[i + 1]))
+                i += 2
+            else:
+                i += 1
+            continue
+        elif ch in "{}":
+            i += 1
+            continue
+        else:
+            result.append(ch)
+            i += 1
+
+    return "".join(result)
+
+
 def render_inline_math_html(text: str) -> Tuple[str, bool]:
     """
-    Convert inline math ($...$) to KaTeX HTML spans suitable for email clients.
-    Returns (processed_html, math_found).
+    convert inline math ($...$) to KaTeX HTML spans suitable for email clients.
+    returns (processed_html, math_found).
     """
     if not text or "$" not in text:
-        return text, False
-
-    ctx = _get_katex_context()
-    if ctx is None:
         return text, False
 
     math_found = False
 
     def repl(match: re.Match[str]) -> str:
         nonlocal math_found
-        expr = match.group(1)
-        try:
-            html = ctx.call("__katex_render", expr, {"throwOnError": False})
+        expr = match.group(1).strip()
+        plain = latex_to_plain(expr)
+        if plain:
             math_found = True
-            return f"<span class=\"math-inline\">{html}</span>"
-        except Exception as err:
-            print(f"[render_inline_math_html] failed to render '{expr}': {err}")
-            return match.group(0)
+            return f"<span class=\"math-inline\">{html.escape(plain)}</span>"
+        return match.group(0)
 
     return _INLINE_MATH_RE.sub(repl, text), math_found
-
-
-@lru_cache(maxsize=1)
-def get_katex_css() -> str:
-    """
-    Load the bundled KaTeX CSS used when rendering math in HTML emails.
-    """
-    css_path = Path(__file__).resolve().parent / "katex_email.css"
-    try:
-        return css_path.read_text(encoding="utf-8")
-    except Exception as exc:
-        print(f"[get_katex_css] unable to read KaTeX CSS: {exc}")
-        return ""
 
 
 def fetch_arxiv_feed(url):
