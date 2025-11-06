@@ -5,7 +5,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from itsdangerous import SignatureExpired, BadSignature
 
 from shared.db import db
-from webapp.models import User, Paper, UserPreference, Subscriber, Feedback
+from webapp.models import User, Paper, UserPreference, Subscriber, Feedback, PreferenceConfig
 from shared.utils import get_user_by_email
 from shared.mail import send_reset_email, get_serializer, send_email
 import os
@@ -295,26 +295,25 @@ def recommendations():
     render personalized arXiv recommendations using saved preferences,
     capped at 10 total results and showing the category of origin.
     """
-    import yaml
+    from sqlalchemy.exc import SQLAlchemyError
     from urllib.parse import quote_plus
     from shared.utils import fetch_arxiv_feed
 
-    prefs_path = os.path.join(os.path.dirname(__file__), "user_prefs.yaml")
-
     # load preferences
     try:
-        with open(prefs_path, "r", encoding="utf-8") as f:
-            prefs = yaml.safe_load(f) or {}
-    except Exception as e:
-        print(f"[recommendations] error reading prefs: {e}")
-        prefs = {}
+        config = PreferenceConfig.query.first()
+        if config is None:
+            config = PreferenceConfig()
+            db.session.add(config)
+            db.session.commit()
+        prefs = config.as_dict()
+    except SQLAlchemyError as e:
+        print(f"[recommendations] db error loading prefs: {e}")
+        prefs = {"keywords": [], "categories": ["astro-ph"], "min_score": 1.0}
 
-    keywords = prefs.get("keywords", [])
-    categories = prefs.get("categories", ["astro-ph"])
-    try:
-        min_score = float(prefs.get("min_score", 1.0))
-    except Exception:
-        min_score = 1.0
+    keywords = prefs.get("keywords") or []
+    categories = prefs.get("categories") or ["astro-ph"]
+    min_score = prefs.get("min_score", 1.0) or 1.0
 
     if not keywords:
         return render_template(
