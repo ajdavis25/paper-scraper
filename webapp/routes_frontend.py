@@ -4,10 +4,11 @@ from flask_login import current_user, login_required, login_user, logout_user
 from werkzeug.security import generate_password_hash, check_password_hash
 from itsdangerous import SignatureExpired, BadSignature
 from sqlalchemy import func
+from markupsafe import Markup
 
 from shared.db import db
 from webapp.models import User, Paper, UserPreference, Subscriber, Feedback, PreferenceConfig
-from shared.utils import get_user_by_email
+from shared.utils import get_user_by_email, render_inline_math_html
 from shared.mail import send_reset_email, get_serializer, send_email
 import os
 
@@ -122,6 +123,7 @@ def unsubscribe():
 
 
 @frontend.route("/preferences")
+@login_required
 def preferences_page():
     return render_template("preferences.html")
 
@@ -292,6 +294,7 @@ def user_feedback():
 # recommendations page
 # ----------------------------------------------------------
 @frontend.route("/recommendations")
+@login_required
 def recommendations():
     """
     render personalized arXiv recommendations using saved preferences,
@@ -303,12 +306,8 @@ def recommendations():
 
     # load preferences
     try:
-        config = PreferenceConfig.query.first()
-        if config is None:
-            config = PreferenceConfig()
-            db.session.add(config)
-            db.session.commit()
-        prefs = config.as_dict()
+        config = PreferenceConfig.get_or_create_for_user(current_user)
+        prefs = config.as_dict() if config else {"keywords": [], "categories": ["astro-ph"], "min_score": 1.0}
     except SQLAlchemyError as e:
         print(f"[recommendations] db error loading prefs: {e}")
         prefs = {"keywords": [], "categories": ["astro-ph"], "min_score": 1.0}
@@ -379,11 +378,16 @@ def recommendations():
     scored.sort(key=lambda x: x.get("score", 0), reverse=True)
     scored = scored[:10]
 
+    for rec in scored:
+        summary_text = rec.get("summary", "")
+        summary_html, _ = render_inline_math_html(summary_text or "")
+        rec["summary_html"] = Markup(summary_html)
+
     msg = (
         f"showing {len(scored)} recent papers across {', '.join(categories)} "
-        f"with score ≥ {min_score}."
-        if scored else
-        "no papers met your minimum relevance threshold."
+        f"with score >= {min_score}."
+        if scored
+        else "no papers met your minimum relevance threshold."
     )
 
     return render_template("recommendations.html", recs=scored, message=msg)
@@ -393,7 +397,7 @@ def recommendations():
 # record recommendation feedback (like/dislike)
 # ----------------------------------------------------------
 def _record_recommendation_feedback(email: str, arxiv_id: str, liked: bool, source: str = "recommendations"):
-    """Shared helper to store recommendation feedback."""
+    """shared helper to store recommendation feedback."""
     email = (email or "").strip().lower()
     arxiv_id = (arxiv_id or "").strip()
     if not email or not arxiv_id:
@@ -461,7 +465,7 @@ def recommendation_feedback():
 
 @frontend.route("/like")
 def like_from_email():
-    """Handle email like/dislike links."""
+    """handle email like/dislike links."""
     email = request.args.get("email", "")
     arxiv_id = request.args.get("arxiv_id", "")
     liked_param = request.args.get("liked", "true")
@@ -469,16 +473,16 @@ def like_from_email():
 
     try:
         _record_recommendation_feedback(email, arxiv_id, liked, source="email")
-        heading = "Thanks for your feedback!"
-        message = f"We recorded your {'like' if liked else 'dislike'} for arXiv:{arxiv_id}."
+        heading = "thanks for your feedback!"
+        message = f"we recorded your {'like' if liked else 'dislike'} for arXiv:{arxiv_id}."
         status = 200
     except ValueError:
-        heading = "Missing information"
-        message = "We couldn't record your feedback because the link was incomplete."
+        heading = "missing information"
+        message = "we couldn't record your feedback because the link was incomplete."
         status = 400
     except Exception as exc:
-        heading = "Something went wrong"
-        message = "We couldn't record your feedback. Please try again later."
+        heading = "something went wrong"
+        message = "we couldn't record your feedback. please try again later."
         status = 500
         print(f"[like_from_email] error storing feedback: {exc}")
 
@@ -540,17 +544,17 @@ def info_page():
     sample_digest = [
         {
             "title": "probing dark matter substructure with lensed quasars",
-            "category": "astro-ph.CO",
+            "category": "astro-ph.CO", "score": 3,
             "summary": "concise analysis of strong-lensing flux anomalies as subhalo probes.",
         },
         {
             "title": "machine-learning forecasts for gravitational-wave events",
-            "category": "astro-ph.IM",
+            "category": "astro-ph.IM", "score": 4,
             "summary": "overview of a random-forest pipeline that predicts merger rates from detector telemetry.",
         },
         {
             "title": "turbulence-regulated star formation in molecular clouds",
-            "category": "astro-ph.GA",
+            "category": "astro-ph.GA", "score": 2,
             "summary": "simulation-driven insight into how feedback preserves Larson-like scaling.",
         },
     ]

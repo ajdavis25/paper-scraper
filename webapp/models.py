@@ -95,15 +95,101 @@ class PreferenceConfig(db.Model):
     __tablename__ = "preference_config"
 
     id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("user.id", ondelete="CASCADE"),
+        nullable=True,
+        unique=True,
+    )
     keywords = db.Column(db.JSON, default=list)
     authors = db.Column(db.JSON, default=list)
     categories = db.Column(db.JSON, default=list)
     min_score = db.Column(db.Float, default=1.0)
 
+    user = db.relationship(
+        "User",
+        backref=db.backref(
+            "preference_config",
+            uselist=False,
+            cascade="all, delete-orphan",
+        ),
+    )
+
     def as_dict(self):
         return {
-            "keywords": self.keywords or [],
-            "authors": self.authors or [],
-            "categories": self.categories or ["astro-ph"],
+            "keywords": list(self.keywords or []),
+            "authors": list(self.authors or []),
+            "categories": list(self.categories or ["astro-ph"]),
             "min_score": self.min_score if self.min_score is not None else 1.0,
         }
+
+    @classmethod
+    def get_or_create_for_user(cls, user, *, commit=True):
+        """
+        fetch the preference config for a specific user, cloning the global
+        defaults (user_id NULL) when necessary.
+        """
+        if not user:
+            return None
+
+        existing = cls.query.filter_by(user_id=user.id).first()
+        if existing:
+            return existing
+
+        defaults = cls.query.filter_by(user_id=None).first()
+        config = cls(
+            user_id=user.id,
+            keywords=list((defaults.keywords if defaults else []) or []),
+            authors=list((defaults.authors if defaults else []) or []),
+            categories=list((defaults.categories if defaults else []) or ["astro-ph"]),
+            min_score=defaults.min_score if defaults and defaults.min_score is not None else 1.0,
+        )
+        db.session.add(config)
+        if commit:
+            db.session.commit()
+        else:
+            db.session.flush()
+        return config
+
+
+def ensure_preference_config_schema():
+    """
+    ensure the preference_config table has a user_id column so we can store
+    per-user preferences. if the column already exists, nothing happens.
+    """
+    from sqlalchemy import inspect, text
+
+    engine = db.engine
+    inspector = inspect(engine)
+    if not inspector.has_table("preference_config"):
+        return
+
+    existing_columns = {col["name"] for col in inspector.get_columns("preference_config")}
+    if "user_id" not in existing_columns:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE preference_config ADD COLUMN user_id INTEGER"))
+            if engine.dialect.name == "postgresql":
+                try:
+                    conn.execute(
+                        text(
+                            'ALTER TABLE preference_config ADD CONSTRAINT '
+                            'preference_config_user_id_fkey FOREIGN KEY (user_id) '
+                            'REFERENCES "user"(id) ON DELETE CASCADE'
+                        )
+                    )
+                except Exception as exc:  # constraint may already exist
+                    print(f"[migrate] warning adding FK preference_config_user_id_fkey: {exc}")
+            try:
+                conn.execute(
+                    text(
+                        "CREATE INDEX IF NOT EXISTS preference_config_user_id_idx "
+                        "ON preference_config(user_id)"
+                    )
+                )
+            except Exception as exc:
+                print(f"[migrate] warning creating preference_config_user_id_idx: {exc}")
+
+    # ensure a default/global config row exists for cloning new users
+    if not PreferenceConfig.query.filter_by(user_id=None).first():
+        db.session.add(PreferenceConfig())
+        db.session.commit()

@@ -3,6 +3,7 @@
 backend routes that power the dashboard / JSON APIs.
 """
 from flask import Blueprint, request, jsonify
+from flask_login import current_user, login_required
 
 from shared.db import db
 from webapp.models import PreferenceConfig
@@ -11,15 +12,14 @@ backend = Blueprint("backend", __name__)
 
 
 @backend.route("/preferences", methods=["GET", "POST"])
+@login_required
 def api_preferences():
-    """load or persist global preference defaults."""
+    """load or persist per-user preference defaults."""
     if request.method == "GET":
         try:
-            config = PreferenceConfig.query.first()
+            config = PreferenceConfig.get_or_create_for_user(current_user)
             if config is None:
-                config = PreferenceConfig()
-                db.session.add(config)
-                db.session.commit()
+                return jsonify({}), 400
             return jsonify(config.as_dict())
         except Exception as exc:  # pragma: no cover
             print(f"[api/preferences] error loading prefs: {exc}")
@@ -28,10 +28,7 @@ def api_preferences():
     # POST: save preferences
     try:
         data = request.get_json(force=True) or {}
-        config = PreferenceConfig.query.first()
-        if config is None:
-            config = PreferenceConfig()
-            db.session.add(config)
+        config = PreferenceConfig.get_or_create_for_user(current_user, commit=False)
 
         config.keywords = data.get("keywords") or []
         config.authors = data.get("authors") or []

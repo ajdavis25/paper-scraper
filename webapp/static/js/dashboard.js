@@ -3,6 +3,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const form = document.getElementById("prefs-form");
   const status = document.getElementById("save-status");
+  const parsePrefsResponse = (response) => {
+    if (response.status === 401) {
+      window.location.href = "/login";
+      return Promise.reject(new Error("authentication required"));
+    }
+    return response.json();
+  };
 
   
   // ===============================
@@ -78,7 +85,7 @@ document.addEventListener("DOMContentLoaded", () => {
   if (viewBtn && currentPrefs) {
     viewBtn.addEventListener("click", () => {
       fetch("/api/preferences")
-        .then(r => r.json())
+        .then(parsePrefsResponse)
         .then(prefs => {
           document.querySelector("#keywords").value = (prefs.keywords || []).join(", ");
           document.querySelector("#authors").value = (prefs.authors || []).join(", ");
@@ -118,7 +125,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // ===============================
   if (form) {
     fetch("/api/preferences")
-      .then((r) => r.json())
+      .then(parsePrefsResponse)
       .then((prefs) => {
         if (prefs) {
           if (prefs.keywords)

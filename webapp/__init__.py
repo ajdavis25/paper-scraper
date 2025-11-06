@@ -37,7 +37,15 @@ def create_app():
     db.init_app(app)
     mail.init_app(app)
 
-    from .models import User, Paper, UserPreference, Subscriber, Feedback
+    from .models import (
+        User,
+        Paper,
+        UserPreference,
+        Subscriber,
+        Feedback,
+        PreferenceConfig,
+        ensure_preference_config_schema,
+    )
 
     login_manager = LoginManager()
     login_manager.login_view = "frontend.login"
@@ -55,6 +63,7 @@ def create_app():
     with app.app_context():
         try:
             db.create_all()
+            ensure_preference_config_schema()
         except Exception as exc:
             import traceback
             print("[startup] db.create_all() failed:", exc, file=sys.stderr)

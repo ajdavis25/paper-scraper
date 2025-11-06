@@ -21,6 +21,11 @@ body {
   padding: 0;
 }
 
+.math-inline {
+  font-style: italic;
+  letter-spacing: 0.01em;
+}
+
 /* ========== HEADER ========== */
 header {
   background-color: #fff;

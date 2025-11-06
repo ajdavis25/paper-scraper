@@ -5,11 +5,14 @@ general-purpose helpers for astro-ph digest.
 from __future__ import annotations
 
 import html
+import json
 import re
-import yaml
-import requests
-import xml.etree.ElementTree as ET
+from pathlib import Path
 from typing import Tuple
+
+import requests
+import yaml
+import xml.etree.ElementTree as ET
 
 
 # ---------------------------------------------------------------------------
@@ -59,6 +62,32 @@ _ARG_FIX_RE = re.compile(
     r"(?P<arg>(?:\\[A-Za-z]+(?:\{[^}]+\})?)|[A-Za-z0-9])"
 )
 _INLINE_MATH_RE = re.compile(r"(?<!\\)\$(.+?)(?<!\\)\$")
+_SUBSUP_TOKEN_PATTERN = re.compile(
+    r"(?<![\w$])([A-Za-z0-9]+(?:_(?:\{[^}]+\}|[A-Za-z0-9]+)|\^(?:\{[^}]+\}|[A-Za-z0-9]+))+)"
+)
+
+
+def _load_latex_symbols() -> dict[str, str]:
+    data_path = Path(__file__).resolve().parent / "latex_symbols.json"
+    try:
+        with data_path.open("r", encoding="utf-8") as f:
+            raw: dict[str, str] = json.load(f)
+    except FileNotFoundError:
+        print(f"[latex] warning: symbol map {data_path} missing; using minimal fallback.")
+        raw = {}
+
+    normalized = {k.replace("\\\\", "\\"): v for k, v in raw.items()}
+    normalized.update(
+        {
+            "\\degree": "°",
+            "\\deg": "°",
+            "\\textdegree": "°",
+        }
+    )
+    return normalized
+
+
+LATEX_SYMBOLS = _load_latex_symbols()
 
 
 def wrap_inline_tex(text: str) -> str:
@@ -160,102 +189,61 @@ def wrap_inline_tex(text: str) -> str:
         out.append(ch)
         i += 1
 
-    wrapped = "".join(out).replace("$ $", "$")
+    wrapped = "".join(out)
+
+    segments = wrapped.split("$")
+    for idx in range(0, len(segments), 2):
+        segments[idx] = _SUBSUP_TOKEN_PATTERN.sub(
+            lambda m: f"${m.group(1)}$", segments[idx]
+        )
+
+    wrapped = "$".join(segments).replace("$ $", "$")
     return wrapped
 
 
-_SUPERSCRIPT_TRANS = str.maketrans(
-    "0123456789+-=()nijkm",
-    "⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻⁼⁽⁾ⁿⁱʲᵏᵐ",
-)
-_SUBSCRIPT_TRANS = str.maketrans(
-    "0123456789+-=()nijkm",
-    "₀₁₂₃₄₅₆₇₈₉₊₋₌₍₎ₙᵢⱼₖₘ",
-)
 
 
 def _to_superscript(text: str) -> str:
-    return text.translate(_SUPERSCRIPT_TRANS)
+    if not text:
+        return ""
+
+    result = []
+    fallback = []
+    for ch in text:
+        mapped = _SUPERSCRIPT_MAP.get(ch)
+        if mapped:
+            if fallback:
+                result.append("\u207d" + "".join(fallback) + "\u207e")
+                fallback = []
+            result.append(mapped)
+        else:
+            fallback.append(ch)
+    if fallback:
+        result.append("\u207d" + "".join(fallback) + "\u207e")
+    return "".join(result)
 
 
 def _to_subscript(text: str) -> str:
-    return text.translate(_SUBSCRIPT_TRANS)
+    if not text:
+        return ""
+
+    result = []
+    fallback = []
+    for ch in text:
+        mapped = _SUBSCRIPT_MAP.get(ch)
+        if mapped:
+            if fallback:
+                result.append("\u208d" + "".join(fallback) + "\u208e")
+                fallback = []
+            result.append(mapped)
+        else:
+            fallback.append(ch)
+    if fallback:
+        result.append("\u208d" + "".join(fallback) + "\u208e")
+    return "".join(result)
 
 
-LATEX_SYMBOLS = {
-    # greek letters
-    "\\alpha": "α",
-    "\\beta": "β",
-    "\\gamma": "γ",
-    "\\delta": "δ",
-    "\\epsilon": "ε",
-    "\\varepsilon": "ϵ",
-    "\\zeta": "ζ",
-    "\\eta": "η",
-    "\\theta": "θ",
-    "\\vartheta": "ϑ",
-    "\\iota": "ι",
-    "\\kappa": "κ",
-    "\\lambda": "λ",
-    "\\mu": "μ",
-    "\\nu": "ν",
-    "\\xi": "ξ",
-    "\\pi": "π",
-    "\\rho": "ρ",
-    "\\varrho": "ϱ",
-    "\\sigma": "σ",
-    "\\varsigma": "ς",
-    "\\tau": "τ",
-    "\\upsilon": "υ",
-    "\\phi": "φ",
-    "\\varphi": "ϕ",
-    "\\chi": "χ",
-    "\\psi": "ψ",
-    "\\omega": "ω",
-    "\\Gamma": "Γ",
-    "\\Delta": "Δ",
-    "\\Theta": "Θ",
-    "\\Lambda": "Λ",
-    "\\Xi": "Ξ",
-    "\\Pi": "Π",
-    "\\Sigma": "Σ",
-    "\\Upsilon": "Υ",
-    "\\Phi": "Φ",
-    "\\Psi": "Ψ",
-    "\\Omega": "Ω",
-    # relations / symbols
-    "\\pm": "±",
-    "\\mp": "∓",
-    "\\times": "×",
-    "\\cdot": "·",
-    "\\otimes": "⊗",
-    "\\oplus": "⊕",
-    "\\ominus": "⊖",
-    "\\oslash": "⊘",
-    "\\leq": "≤",
-    "\\geq": "≥",
-    "\\neq": "≠",
-    "\\approx": "≈",
-    "\\sim": "∼",
-    "\\simeq": "≃",
-    "\\propto": "∝",
-    "\\infty": "∞",
-    "\\rightarrow": "→",
-    "\\leftarrow": "←",
-    "\\Rightarrow": "⇒",
-    "\\Leftarrow": "⇐",
-    "\\lesssim": "≲",
-    "\\gtrsim": "≳",
-    "\\ll": "≪",
-    "\\gg": "≫",
-    "\\odot": "⊙",
-    "\\oplus": "⊕",
-    "\\degree": "°",
-    "\\deg": "°",
-    "\\partial": "∂",
-    "\\nabla": "∇",
-    "\\cdots": "⋯",
-    "\\ldots": "…",
+EXTRA_LATEX_SYMBOLS = {
     "\\ln": "ln",
     "\\log": "log",
     "\\exp": "exp",
@@ -264,7 +252,10 @@ LATEX_SYMBOLS = {
     "\\tan": "tan",
     "\\min": "min",
     "\\max": "max",
+    "\\operatorname": "",
 }
+
+LATEX_SYMBOLS.update(EXTRA_LATEX_SYMBOLS)
 
 ACCENT_COMBINERS = {
     "dot": "\u0307",
@@ -276,31 +267,90 @@ ACCENT_COMBINERS = {
     "bar": "\u0304",
     "overline": "\u0305",
     "breve": "\u0306",
-    "check": "\u030C",
+    "check": "\u030c",
     "acute": "\u0301",
     "grave": "\u0300",
-    "vec": "\u20D7",
+    "vec": "\u20d7",
     "underline": "\u0332",
 }
 
-_SUPERSCRIPT_TRANS = str.maketrans(
-    "0123456789+-=()nijkm",
-    "⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻⁼⁽⁾ⁿⁱʲᵏᵐ",
-)
-_SUBSCRIPT_TRANS = str.maketrans(
-    "0123456789+-=()nijkm",
-    "₀₁₂₃₄₅₆₇₈₉₊₋₌₍₎ₙᵢⱼₖₘ",
-)
+_SUPERSCRIPT_MAP = {
+    "0": "\u2070",
+    "1": "\u00b9",
+    "2": "\u00b2",
+    "3": "\u00b3",
+    "4": "\u2074",
+    "5": "\u2075",
+    "6": "\u2076",
+    "7": "\u2077",
+    "8": "\u2078",
+    "9": "\u2079",
+    "+": "\u207a",
+    "-": "\u207b",
+    "=": "\u207c",
+    "(": "\u207d",
+    ")": "\u207e",
+    "n": "\u207f",
+    "i": "\u2071",
+    "j": "\u02b2",
+    "k": "\u1d4f",
+    "m": "\u1d50",
+    "a": "\ua731",
+    "b": "\u1d47",
+    "c": "\u1d9c",
+    "d": "\u1d48",
+    "e": "\u1d49",
+    "f": "\u1da0",
+    "g": "\u1d4d",
+    "h": "\u02b0",
+    "l": "\u02e1",
+    "o": "\u1d52",
+    "p": "\u1d56",
+    "r": "\u02b3",
+    "s": "\u02e2",
+    "t": "\u1d57",
+    "u": "\u1d58",
+    "v": "\u1d5b",
+    "w": "\u02b7",
+    "x": "\u02e3",
+    "y": "\u02b8",
+    "z": "\u1dbb",
+}
 
-
-def _to_superscript(text: str) -> str:
-    return text.translate(_SUPERSCRIPT_TRANS)
-
-
-def _to_subscript(text: str) -> str:
-    return text.translate(_SUBSCRIPT_TRANS)
-
-
+_SUBSCRIPT_MAP = {
+    "0": "\u2080",
+    "1": "\u2081",
+    "2": "\u2082",
+    "3": "\u2083",
+    "4": "\u2084",
+    "5": "\u2085",
+    "6": "\u2086",
+    "7": "\u2087",
+    "8": "\u2088",
+    "9": "\u2089",
+    "+": "\u208a",
+    "-": "\u208b",
+    "=": "\u208c",
+    "(": "\u208d",
+    ")": "\u208e",
+    "a": "\u2090",
+    "e": "\u2091",
+    "h": "\u2095",
+    "i": "\u1d62",
+    "j": "\u2c7c",
+    "k": "\u2096",
+    "l": "\u2097",
+    "m": "\u2098",
+    "n": "\u2099",
+    "o": "\u2092",
+    "p": "\u209a",
+    "r": "\u1d63",
+    "s": "\u209b",
+    "t": "\u209c",
+    "u": "\u1d64",
+    "v": "\u1d65",
+    "x": "\u2093",
+}
 def _read_group(expr: str, idx: int) -> Tuple[str, int]:
     if idx >= len(expr) or expr[idx] != "{":
         return "", idx
@@ -399,22 +449,28 @@ def latex_to_plain(expr: str) -> str:
                 content, next_idx = _read_group(expr, i + 1)
                 result.append(_to_superscript(latex_to_plain(content)))
                 i = next_idx
-            elif i + 1 < length:
-                result.append(_to_superscript(expr[i + 1]))
-                i += 2
             else:
-                i += 1
+                j = i + 1
+                token = []
+                while j < length and (expr[j].isalnum() or expr[j] in {"'", "\\"}):
+                    token.append(expr[j])
+                    j += 1
+                result.append(_to_superscript("".join(token)))
+                i = j
             continue
         elif ch == "_":
             if i + 1 < length and expr[i + 1] == "{":
                 content, next_idx = _read_group(expr, i + 1)
                 result.append(_to_subscript(latex_to_plain(content)))
                 i = next_idx
-            elif i + 1 < length:
-                result.append(_to_subscript(expr[i + 1]))
-                i += 2
             else:
-                i += 1
+                j = i + 1
+                token = []
+                while j < length and (expr[j].isalnum() or expr[j] in {"'", "\\"}):
+                    token.append(expr[j])
+                    j += 1
+                result.append(_to_subscript("".join(token)))
+                i = j
             continue
         elif ch in "{}":
             i += 1
