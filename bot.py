@@ -279,39 +279,36 @@ def render_paper_entry_html(paper, user_email, track_base):
     link = paper.get("url") or canon_abs_url(paper) or ""
     authors = paper.get("authors", [])
     authors_line = ", ".join(authors) if isinstance(authors, list) else str(authors)
-    like_link = f"{track_base}/like?email={user_email}&arxiv_id={arxiv_id}&liked=true"
-    dislike_link = f"{track_base}/like?email={user_email}&arxiv_id={arxiv_id}&liked=false"
     category = paper.get("category")
     score = paper.get("score")
-    published = paper.get("published")
-    if isinstance(published, dt.datetime):
-        published_display = published.strftime("%Y-%m-%d")
-    else:
-        published_display = (published or "").strip()
-    if isinstance(published, dt.datetime):
-        published_display = published.strftime("%Y-%m-%d")
-    else:
-        published_display = (published or "").strip()
 
-    parts = [
-        "<li>",
-        f'<p><b><a href="{link}">{title}</a></b></p>',
-    ]
-    meta_bits = []
+    like_link = f"{track_base}/like?email={user_email}&arxiv_id={arxiv_id}&liked=true"
+    dislike_link = f"{track_base}/like?email={user_email}&arxiv_id={arxiv_id}&liked=false"
+
+    # initialize containers
+    parts = []
+    meta_tags = []
+
+    parts.append("<li>")
+    parts.append(f"<p><strong><a href='{link}'>{title}</a></strong></p>")
+
     if category:
-        meta_bits.append(f"<span class='category-tag'>{category}</span>")
+        meta_tags.append(f"<span class='category-tag'>{category}</span>")
     if score is not None:
-        meta_bits.append(f"<span class='score-tag'>score: {score}</span>")
-    if published_display:
-        meta_bits.append(f"<span class='date'>{published_display}</span>")
-    if meta_bits:
-        parts.append("<p>" + " ".join(meta_bits) + "</p>")
+        meta_tags.append(f"<span class='score-tag'>score: {score}</span>")
+
+    if meta_tags:
+        parts.append("<p>" + " ".join(meta_tags) + "</p>")
     if authors_line:
         parts.append(f"<p><i>{authors_line}</i></p>")
     if paper.get("summary"):
         parts.append(f"<p>{paper['summary']}</p>")
-    parts.append(f"<p><a href='{like_link}'>👍 like</a> | <a href='{dislike_link}'>👎 dislike</a></p>")
+
+    parts.append(
+        f"<p><a href='{like_link}'>👍 like</a> | <a href='{dislike_link}'>👎 dislike</a></p>"
+    )
     parts.append("</li>")
+
     return "\n".join(parts)
 
 
@@ -324,29 +321,35 @@ def render_paper_entry_text(paper, user_email, track_base):
     link = paper.get("url") or canon_abs_url(paper) or ""
     authors = paper.get("authors", [])
     authors_line = ", ".join(authors) if isinstance(authors, list) else str(authors)
-    like_link = f"{track_base}/like?email={user_email}&arxiv_id={arxiv_id}&liked=true"
-    dislike_link = f"{track_base}/like?email={user_email}&arxiv_id={arxiv_id}&liked=false"
     category = paper.get("category")
     score = paper.get("score")
-    published = paper.get("published")
 
+    like_link = f"{track_base}/like?email={user_email}&arxiv_id={arxiv_id}&liked=true"
+    dislike_link = f"{track_base}/like?email={user_email}&arxiv_id={arxiv_id}&liked=false"
+
+    # initialize containers
     lines = []
-    lines.append(f"{title}\n{link}\n")
-    if category or score is not None or published_display:
-        meta = []
-        if category:
-            meta.append(f"category: {category}")
-        if score is not None:
-            meta.append(f"score: {score}")
-        if published_display:
-            meta.append(f"published: {published_display}")
-        lines.append("; ".join(meta) + "\n")
+    meta_info = []
+
+    lines.append(f"title: {title}")
+    lines.append(f"link: {link}")
+
+    if category:
+        meta_info.append(f"category: {category}")
+    if score is not None:
+        meta_info.append(f"score: {score}")
+    if meta_info:
+        lines.append("; ".join(meta_info))
+
     if authors_line:
-        lines.append(f"authors: {authors_line}\n")
+        lines.append(f"authors: {authors_line}")
     if paper.get("summary"):
-        lines.append(paper["summary"] + "\n")
-    lines.append(f"👍 like: {like_link}\n👎 dislike: {dislike_link}\n")
+        lines.append(paper["summary"])
+
+    lines.append(f"👍 like: {like_link}")
+    lines.append(f"👎 dislike: {dislike_link}")
     lines.append("-" * 60)
+
     return "\n".join(lines)
 
 
