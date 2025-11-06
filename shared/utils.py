@@ -90,6 +90,9 @@ def _load_latex_symbols() -> dict[str, str]:
 LATEX_SYMBOLS = _load_latex_symbols()
 
 
+_TEXT_MODE_COMMANDS = {"\\cal", "\\rm", "\\bf", "\\it"}
+
+
 def wrap_inline_tex(text: str) -> str:
     """
     wrap bare TeX commands (e.g. \\dot{M}) in $...$ so MathJax/KaTeX can render them.
@@ -134,6 +137,9 @@ def wrap_inline_tex(text: str) -> str:
 
     while i < length:
         ch = text[i]
+        if ch in "{}" and not in_math:
+            i += 1
+            continue
         if ch == "$":
             in_math = not in_math
             out.append(ch)
@@ -151,6 +157,9 @@ def wrap_inline_tex(text: str) -> str:
                 continue
 
             cmd = text[i:j]
+            if cmd in _TEXT_MODE_COMMANDS:
+                i = j
+                continue
             if cmd in {"\\n", "\\r"}:
                 out.append(cmd)
                 i = j
@@ -186,6 +195,10 @@ def wrap_inline_tex(text: str) -> str:
             i = idx
             continue
 
+        if ch == " ":
+            if not out or out[-1].endswith(" "):
+                i += 1
+                continue
         out.append(ch)
         i += 1
 
@@ -397,6 +410,7 @@ def latex_to_plain(expr: str) -> str:
         "\\rm",
         "\\bf",
         "\\emph",
+        "\\cal",
     }
 
     while i < length:
@@ -431,6 +445,11 @@ def latex_to_plain(expr: str) -> str:
                     result.append(f"√({latex_to_plain(radicand)})")
                     i = next_idx
                     continue
+            if cmd == "\\cal":
+                i = j
+                while i < length and expr[i].isspace():
+                    i += 1
+                continue
             if cmd in text_commands:
                 content, next_idx = _read_group(expr, j)
                 if content:
