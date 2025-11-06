@@ -36,7 +36,7 @@ def login():
                 login_user(user)
                 session["is_admin"] = bool(user.is_admin)
                 flash("logged in successfully.", "success")
-                return redirect(url_for("frontend.dashboard_redirect"))
+                return redirect(url_for("frontend.index"))
             else:
                 flash("invalid email or password.", "error")
                 return redirect(url_for("frontend.login"))

@@ -9,6 +9,7 @@ __pycache__/
 venv/
 *.db
 *.sqlite
+*.sqlite3
 *.log
 *.yaml
 user_prefs.yaml
