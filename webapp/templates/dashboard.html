@@ -13,7 +13,9 @@ endblock %} {% block content %}
 <ul class="paper-list">
   {% for p in prefs %}
   <li>
-    <a href="{{ p.paper.link }}" target="_blank">{{ p.paper.title }}</a>
+    <a href="{{ p.paper.link }}" target="_blank"
+      >{{ p.display_title or p.paper.title or ('arXiv:' ~ p.paper.arxiv_id) }}</a
+    >
     <small>({{ p.paper.arxiv_id }}, {{ p.timestamp }})</small>
   </li>
   {% endfor %}

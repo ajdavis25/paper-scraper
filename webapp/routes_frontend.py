@@ -6,6 +6,8 @@ from itsdangerous import SignatureExpired, BadSignature
 from sqlalchemy import func
 from markupsafe import Markup
 import yaml
+import requests
+import xml.etree.ElementTree as ET
 
 from shared.db import db
 from webapp.account_utils import ensure_user_stub
@@ -377,17 +379,48 @@ def dashboard(email):
         .all()
     )
 
-    prefs = [
-        {
-            "paper": {
-                "title": p.paper.title or f"arXiv:{p.paper.arxiv_id}",
-                "link": p.paper.link or f"https://arxiv.org/abs/{p.paper.arxiv_id}",
-                "arxiv_id": p.paper.arxiv_id,
-            },
-            "timestamp": p.created_at.strftime("%Y-%m-%d %H:%M:%S"),
-        }
-        for p in liked_prefs
+    missing_ids = [
+        pref.paper.arxiv_id
+        for pref in liked_prefs
+        if not (pref.paper.title or "").strip()
     ]
+    fetched_titles = _fetch_arxiv_titles(missing_ids)
+
+    prefs = []
+    updated = False
+    for pref in liked_prefs:
+        paper = pref.paper
+        display_title = (paper.title or "").strip()
+        if not display_title:
+            display_title = fetched_titles.get(paper.arxiv_id, "")
+            if display_title:
+                paper.title = display_title
+                updated = True
+        if not display_title:
+            display_title = f"arXiv:{paper.arxiv_id}"
+
+        link = (paper.link or "").strip()
+        if not link:
+            link = f"https://arxiv.org/abs/{paper.arxiv_id}"
+
+        prefs.append(
+            {
+                "display_title": display_title,
+                "paper": {
+                    "title": paper.title or "",
+                    "link": link,
+                    "arxiv_id": paper.arxiv_id,
+                },
+                "timestamp": pref.created_at.strftime("%Y-%m-%d %H:%M:%S"),
+            }
+        )
+
+    if updated:
+        try:
+            db.session.commit()
+        except Exception as exc:
+            db.session.rollback()
+            print(f"[dashboard] failed to persist fetched titles: {exc}")
 
     message = "read anything super yet?" if not prefs else None
     return render_template("dashboard.html", user={"email": email}, prefs=prefs, message=message)
@@ -590,6 +623,37 @@ def _send_subscription_email(to_email: str, kind: str = "welcome") -> bool:
 
     print(f"[subscription-email] sent {kind} email to {target}")
     return True
+
+
+def _fetch_arxiv_titles(arxiv_ids: list[str]) -> dict[str, str]:
+    """fetch title data for arXiv ids that lack metadata in the database."""
+    ids = [aid for aid in (arxiv_ids or []) if aid]
+    if not ids:
+        return {}
+
+    titles: dict[str, str] = {}
+    base_url = "https://export.arxiv.org/api/query"
+    ns = {"atom": "http://www.w3.org/2005/Atom"}
+
+    for i in range(0, len(ids), 20):
+        chunk = ids[i : i + 20]
+        params = {"id_list": ",".join(chunk)}
+        try:
+            resp = requests.get(base_url, params=params, timeout=10)
+            resp.raise_for_status()
+            root = ET.fromstring(resp.text)
+            for entry in root.findall("atom:entry", ns):
+                entry_id = entry.find("atom:id", ns)
+                raw_id = (entry_id.text or "").strip() if entry_id is not None else ""
+                arxiv_id = raw_id.split("/abs/")[-1] if raw_id else ""
+                title_el = entry.find("atom:title", ns)
+                title_text = (title_el.text or "").strip() if title_el is not None else ""
+                if arxiv_id and title_text:
+                    titles[arxiv_id] = title_text
+        except Exception as exc:
+            print(f"[dashboard] failed to fetch arxiv titles: {exc}")
+
+    return titles
 
 
 @frontend.route("/send-feedback", methods=["GET", "POST"])
