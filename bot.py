@@ -1,13 +1,19 @@
 import re, os, yaml, feedparser, requests, datetime as dt
+import html
 from filters import score_paper, match_category
 from mailer import send_email
 from curator import merge_preferences
-from shared.utils import wrap_inline_tex, render_inline_math_html
+from shared.utils import (
+    wrap_inline_tex,
+    render_inline_math_html,
+    prepare_summary,
+)
 
 print(f"[astro-ph bot] running: {__file__} SHA={os.environ.get('GITHUB_SHA', 'local')}")
 
 # arXiv id pattern and canonical link helper
 _ARXIV_ID_RE = re.compile(r'(?:arxiv\.org/(?:abs|pdf)/)?(\d{4}\.\d{4,5})(v\d+)?', re.I)
+_TAG_RE = re.compile(r"<[^>]+>")
 
 
 def canon_abs_url(paper):
@@ -139,11 +145,12 @@ def fetch_recent(cfg):
         m = _ARXIV_ID_RE.search(entry_id) or _ARXIV_ID_RE.search(getattr(entry, "link", ""))
         arxiv_id = (m.group(1) + (m.group(2) or "")) if m else ""
 
-        summary_text = entry.summary.strip()
-        summary_text = wrap_inline_tex(summary_text)
+        summary_wrapped, summary_html, summary_plain = prepare_summary(entry.summary.strip())
         results.append({
             "title": entry.title.strip(),
-            "summary": summary_text,
+            "summary": summary_wrapped,
+            "summary_html": summary_html,
+            "summary_plain": summary_plain,
             "published": pub,
             "link": getattr(entry, "link", ""),
             "id": entry_id,
@@ -304,11 +311,16 @@ def render_paper_entry_html(paper, user_email, track_base):
         parts.append("<p>" + " ".join(meta_tags) + "</p>")
     if authors_line:
         parts.append(f"<p><i>{authors_line}</i></p>")
-    if paper.get("summary"):
-        summary_html, has_math = render_inline_math_html(paper["summary"])
+    summary_html = paper.get("summary_html")
+    has_math = False
+    if summary_html:
         parts.append(f"<p>{summary_html}</p>")
+        has_math = True
     else:
-        has_math = False
+        summary_text = paper.get("summary")
+        if summary_text:
+            summary_html, has_math = render_inline_math_html(summary_text)
+            parts.append(f"<p>{summary_html}</p>")
 
     parts.append(
         f"<p><a href='{like_link}'>👍 like</a> | <a href='{dislike_link}'>👎 dislike</a></p>"
@@ -349,8 +361,15 @@ def render_paper_entry_text(paper, user_email, track_base):
 
     if authors_line:
         lines.append(f"authors: {authors_line}")
-    if paper.get("summary"):
-        lines.append(paper["summary"])
+    summary_plain = paper.get("summary_plain")
+    if summary_plain:
+        lines.append(summary_plain)
+    else:
+        summary = paper.get("summary")
+        if summary:
+            summary_html, _ = render_inline_math_html(summary)
+            summary_plain = html.unescape(_TAG_RE.sub("", summary_html))
+            lines.append(summary_plain)
 
     lines.append(f"👍 like: {like_link}")
     lines.append(f"👎 dislike: {dislike_link}")

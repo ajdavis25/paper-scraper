@@ -12,7 +12,7 @@ import xml.etree.ElementTree as ET
 from shared.db import db
 from webapp.account_utils import ensure_user_stub
 from webapp.models import User, Paper, UserPreference, Subscriber, Feedback, PreferenceConfig
-from shared.utils import get_user_by_email, render_inline_math_html
+from shared.utils import get_user_by_email
 from shared.mail import send_reset_email, get_serializer, send_email
 import os
 
@@ -725,7 +725,7 @@ def recommendations():
     """
     from sqlalchemy.exc import SQLAlchemyError
     from urllib.parse import quote_plus
-    from shared.utils import fetch_arxiv_feed
+    from shared.utils import fetch_arxiv_feed, render_inline_math_html
 
     # load preferences
     try:
@@ -864,8 +864,10 @@ def recommendations():
     scored = scored[:10]
 
     for rec in scored:
-        summary_text = rec.get("summary", "")
-        summary_html, _ = render_inline_math_html(summary_text or "")
+        summary_html = rec.get("summary_html")
+        if not summary_html:
+            summary_text = rec.get("summary", "") or ""
+            summary_html, _ = render_inline_math_html(summary_text)
         rec["summary_html"] = Markup(summary_html)
 
     display_labels = selected_categories or categories

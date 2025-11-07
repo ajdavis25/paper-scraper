@@ -62,9 +62,39 @@ _ARG_FIX_RE = re.compile(
     r"(?P<arg>(?:\\[A-Za-z]+(?:\{[^}]+\})?)|[A-Za-z0-9])"
 )
 _INLINE_MATH_RE = re.compile(r"(?<!\\)\$(.+?)(?<!\\)\$")
+_PAREN_INLINE_MATH_RE = re.compile(r"\\\((.+?)\\\)")
 _SUBSUP_TOKEN_PATTERN = re.compile(
     r"(?<![\w$])([A-Za-z0-9]+(?:_(?:\{[^}]+\}|[A-Za-z0-9]+)|\^(?:\{[^}]+\}|[A-Za-z0-9]+))+)"
 )
+_MATH_SEGMENT_RE = re.compile(
+    r"(?<!\\)\$(.+?)(?<!\\)\$|\\\((.+?)\\\)|\\\[(.+?)\\\]", re.DOTALL
+)
+_UNICODE_ESCAPE_RE = re.compile(r"\\u([0-9a-fA-F]{4})|\\U([0-9a-fA-F]{8})")
+_TAG_RE = re.compile(r"<[^>]+>")
+
+
+def decode_unicode_escapes(text: str) -> str:
+    """
+    convert literal \\uXXXX (and \\UXXXXXXXX) sequences into their unicode characters.
+    arXiv sometimes double-escapes certain authors' math so we normalize it early.
+    """
+    if not text or "\\u" not in text:
+        return text
+
+    def _replace(match: re.Match[str]) -> str:
+        small = match.group(1)
+        big = match.group(2)
+        code = int(small or big, 16)
+        return chr(code)
+
+    return _UNICODE_ESCAPE_RE.sub(_replace, text)
+
+
+def strip_html_tags(text: str) -> str:
+    if not text:
+        return ""
+    without_tags = _TAG_RE.sub("", text)
+    return html.unescape(without_tags).strip()
 
 
 def _load_latex_symbols() -> dict[str, str]:
@@ -137,6 +167,26 @@ def wrap_inline_tex(text: str) -> str:
 
     while i < length:
         ch = text[i]
+        if text.startswith("\\(", i):
+            in_math = True
+            out.append("\\(")
+            i += 2
+            continue
+        if text.startswith("\\)", i):
+            in_math = False
+            out.append("\\)")
+            i += 2
+            continue
+        if text.startswith("\\[", i):
+            in_math = True
+            out.append("\\[")
+            i += 2
+            continue
+        if text.startswith("\\]", i):
+            in_math = False
+            out.append("\\]")
+            i += 2
+            continue
         if ch in "{}" and not in_math:
             i += 1
             continue
@@ -159,6 +209,8 @@ def wrap_inline_tex(text: str) -> str:
             cmd = text[i:j]
             if cmd in _TEXT_MODE_COMMANDS:
                 i = j
+                while i < length and text[i].isspace():
+                    i += 1
                 continue
             if cmd in {"\\n", "\\r"}:
                 out.append(cmd)
@@ -204,56 +256,34 @@ def wrap_inline_tex(text: str) -> str:
 
     wrapped = "".join(out)
 
-    segments = wrapped.split("$")
-    for idx in range(0, len(segments), 2):
-        segments[idx] = _SUBSUP_TOKEN_PATTERN.sub(
-            lambda m: f"${m.group(1)}$", segments[idx]
-        )
+    placeholders: list[str] = []
 
-    wrapped = "$".join(segments).replace("$ $", "$")
-    return wrapped
+    def _protect(match: re.Match[str]) -> str:
+        placeholders.append(match.group(0))
+        return f"@@MATH{len(placeholders) - 1}@@"
 
+    protected = _MATH_SEGMENT_RE.sub(_protect, wrapped)
+    protected = _SUBSUP_TOKEN_PATTERN.sub(
+        lambda m: f"${m.group(1)}$", protected
+    )
+    for idx, original in enumerate(placeholders):
+        protected = protected.replace(f"@@MATH{idx}@@", original, 1)
 
+    return protected.replace("$ $", "$")
 
 
 def _to_superscript(text: str) -> str:
-    if not text:
+    clean = (text or "").strip()
+    if not clean:
         return ""
-
-    result = []
-    fallback = []
-    for ch in text:
-        mapped = _SUPERSCRIPT_MAP.get(ch)
-        if mapped:
-            if fallback:
-                result.append("\u207d" + "".join(fallback) + "\u207e")
-                fallback = []
-            result.append(mapped)
-        else:
-            fallback.append(ch)
-    if fallback:
-        result.append("\u207d" + "".join(fallback) + "\u207e")
-    return "".join(result)
+    return f"^{{{clean}}}"
 
 
 def _to_subscript(text: str) -> str:
-    if not text:
+    clean = (text or "").strip()
+    if not clean:
         return ""
-
-    result = []
-    fallback = []
-    for ch in text:
-        mapped = _SUBSCRIPT_MAP.get(ch)
-        if mapped:
-            if fallback:
-                result.append("\u208d" + "".join(fallback) + "\u208e")
-                fallback = []
-            result.append(mapped)
-        else:
-            fallback.append(ch)
-    if fallback:
-        result.append("\u208d" + "".join(fallback) + "\u208e")
-    return "".join(result)
+    return f"_{{{clean}}}"
 
 
 EXTRA_LATEX_SYMBOLS = {
@@ -266,6 +296,18 @@ EXTRA_LATEX_SYMBOLS = {
     "\\min": "min",
     "\\max": "max",
     "\\operatorname": "",
+    "\\lesssim": "<=",
+    "\\gtrsim": ">=",
+    "\\times": "x",
+    "\\cdot": "*",
+    "\\Delta": "Delta",
+    "\\delta": "delta",
+    "\\sim": "~",
+    "\\,": " ",
+    "\\;": " ",
+    "\\!": "",
+    "\\quad": "  ",
+    "\\qquad": "    ",
 }
 
 LATEX_SYMBOLS.update(EXTRA_LATEX_SYMBOLS)
@@ -390,6 +432,36 @@ def _apply_accent(cmd: str, content: str) -> str:
     return "".join(char + comb for char in content)
 
 
+_ROMAN_NUMERAL_TABLE = [
+    (1000, "m"),
+    (900, "cm"),
+    (500, "d"),
+    (400, "cd"),
+    (100, "c"),
+    (90, "xc"),
+    (50, "l"),
+    (40, "xl"),
+    (10, "x"),
+    (9, "ix"),
+    (5, "v"),
+    (4, "iv"),
+    (1, "i"),
+]
+
+
+def _int_to_roman(value: int, uppercase: bool = False) -> str:
+    if value <= 0:
+        return str(value)
+    remaining = value
+    parts: list[str] = []
+    for arabic, roman in _ROMAN_NUMERAL_TABLE:
+        while remaining >= arabic:
+            parts.append(roman)
+            remaining -= arabic
+    numeral = "".join(parts)
+    return numeral.upper() if uppercase else numeral
+
+
 def latex_to_plain(expr: str) -> str:
     result = []
     i = 0
@@ -409,6 +481,7 @@ def latex_to_plain(expr: str) -> str:
         "\\mathit",
         "\\rm",
         "\\bf",
+        "\\it",
         "\\emph",
         "\\cal",
     }
@@ -432,6 +505,25 @@ def latex_to_plain(expr: str) -> str:
                     result.append(_apply_accent(bare_cmd, latex_to_plain(content)))
                     i = next_idx
                     continue
+            if bare_cmd == "romannumeral":
+                idx = j
+                if idx < length and expr[idx] == "{":
+                    content, idx = _read_group(expr, idx)
+                else:
+                    digits = []
+                    while idx < length and (expr[idx].isdigit() or expr[idx].isspace()):
+                        if expr[idx].isdigit():
+                            digits.append(expr[idx])
+                        idx += 1
+                    content = "".join(digits)
+                if content:
+                    try:
+                        numeral = _int_to_roman(int(content))
+                        result.append(numeral)
+                    except ValueError:
+                        result.append(content)
+                i = idx
+                continue
             if cmd == "\\frac":
                 num, after_num = _read_group(expr, j)
                 den, after_den = _read_group(expr, after_num)
@@ -454,6 +546,14 @@ def latex_to_plain(expr: str) -> str:
                 content, next_idx = _read_group(expr, j)
                 if content:
                     result.append(latex_to_plain(content))
+                    i = next_idx
+                    continue
+                i = j
+                continue
+            if bare_cmd in {"makeuppercase", "uppercase", "MakeUppercase"}:
+                content, next_idx = _read_group(expr, j)
+                if content:
+                    result.append(latex_to_plain(content).upper())
                     i = next_idx
                     continue
             if cmd in {"\\left", "\\right"}:
@@ -506,7 +606,7 @@ def render_inline_math_html(text: str) -> Tuple[str, bool]:
     convert inline math ($...$) to KaTeX HTML spans suitable for email clients.
     returns (processed_html, math_found).
     """
-    if not text or "$" not in text:
+    if not text:
         return text, False
 
     math_found = False
@@ -520,7 +620,36 @@ def render_inline_math_html(text: str) -> Tuple[str, bool]:
             return f"<span class=\"math-inline\">{html.escape(plain)}</span>"
         return match.group(0)
 
-    return _INLINE_MATH_RE.sub(repl, text), math_found
+    processed = _INLINE_MATH_RE.sub(repl, text)
+    processed = _PAREN_INLINE_MATH_RE.sub(repl, processed)
+    return processed, math_found
+
+
+def prepare_summary(text: str) -> tuple[str, str, str]:
+    """
+    normalize a raw summary to (wrapped_tex, html_with_spans, plain_text).
+    """
+    decoded = decode_unicode_escapes(text or "")
+    wrapped = wrap_inline_tex(decoded)
+    html_summary, _ = render_inline_math_html(wrapped)
+    plain_summary = strip_html_tags(html_summary)
+    return wrapped, html_summary, plain_summary
+
+
+def inline_math_to_plain(text: str) -> str:
+    """
+    replace inline math segments with plain-text approximations.
+    used for plain-text emails where spans are not desired.
+    """
+    if not text:
+        return text
+
+    def repl(match: re.Match[str]) -> str:
+        expr = match.group(1) or match.group(2) or match.group(3) or ""
+        plain = latex_to_plain(expr.strip())
+        return plain if plain else match.group(0)
+
+    return _MATH_SEGMENT_RE.sub(repl, text)
 
 
 def fetch_arxiv_feed(url):
@@ -560,10 +689,13 @@ def fetch_arxiv_feed(url):
             )
 
             summary_text = summary.text.strip() if summary is not None else ""
+            summary_wrapped, summary_html, summary_plain = prepare_summary(summary_text)
             entries.append(
                 {
                     "title": title.text.strip() if title is not None else "(no title)",
-                    "summary": wrap_inline_tex(summary_text),
+                    "summary": summary_wrapped,
+                    "summary_html": summary_html,
+                    "summary_plain": summary_plain,
                     "link": link.text.strip() if link is not None else "#",
                     "published": published.text.strip() if published is not None else "",
                     "authors": author_names,
