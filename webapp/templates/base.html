@@ -13,6 +13,12 @@
       href="{{ url_for('static', filename='css/style.css') }}"
     />
     <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/toastify-js@1.12.0/src/toastify.min.css"
+      integrity="sha384-GSJP6bR4yv1SbLGhL+ntxb4LDi6RC5j8eM8OAh5lwPYdvj9cflIWJiFZdAFr2gyP"
+      crossorigin="anonymous"
+    />
+    <link
       rel="icon"
       type="image/png"
       href="/static/img/favicon-96x96.png"
@@ -27,16 +33,18 @@
     />
     <link rel="manifest" href="/static/img/site.webmanifest" />
   </head>
+  {% set _flash_messages = get_flashed_messages(with_categories=True) %}
   <body
     data-is-admin="{{ 'true' if current_user.is_authenticated and current_user.is_admin else 'false' }}"
+    data-flash="{{ _flash_messages|tojson|safe }}"
   >
     <header>
       <h1><a href="/">astro-ph digest</a></h1>
       <nav>
         {% if not current_user.is_authenticated or not nav_user_is_subscribed %}
         <a href="/subscribe">subscribe</a>
-        {% endif %}
-        {% if not current_user.is_authenticated or nav_user_is_subscribed %}
+        {% endif %} {% if not current_user.is_authenticated or
+        nav_user_is_subscribed %}
         <a href="/unsubscribe">unsubscribe</a>
         {% endif %}
         <a href="/info">info</a>
@@ -56,24 +64,61 @@
       </nav>
     </header>
 
-    <main>
-      {% block content %}{% endblock %}
-      {% with messages = get_flashed_messages(with_categories=True) %}
-        {% if messages %}
-          <div class="flash-messages">
-            {% for category, message in messages %}
-              <div class="flash {{ category }}">{{ message }}</div>
-            {% endfor %}
-          </div>
-        {% endif %}
-      {% endwith %}
-    </main>
+    <main>{% block content %}{% endblock %}</main>
 
     <footer>
       <p>built out of spite because stanford gatekept vox charta</p>
     </footer>
 
     <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+    <script
+      src="https://cdn.jsdelivr.net/npm/toastify-js@1.12.0/src/toastify.min.js"
+      integrity="sha384-1ypXlohFqSnDLddhnZiShX//tfF/8DnI48Om/a4duN13pHb1ptyRaxBONqaAb61d"
+      crossorigin="anonymous"
+    ></script>
+    <script>
+      window.toastifyNotify = function (message, type) {
+        if (!message) {
+          return;
+        }
+        if (!window.Toastify) {
+          console.log("toast:", type || "info", message);
+          return;
+        }
+        Toastify({
+          text: message,
+          duration: 4200,
+          gravity: "top",
+          position: "right",
+          stopOnFocus: true,
+          close: true,
+          className: "toastify-" + (type || "info"),
+        }).showToast();
+      };
+
+      (function showToasts() {
+        if (!window.Toastify) {
+          return;
+        }
+        var body = document.body;
+        var flashData = (body && body.getAttribute("data-flash")) || "[]";
+        var msgs = [];
+        try {
+          msgs = JSON.parse(flashData) || [];
+        } catch (err) {
+          console.warn("[astro] failed to parse flash messages", err);
+          msgs = [];
+        }
+        msgs.forEach(function (entry) {
+          var category = entry[0] || "info";
+          var message = entry[1] || "";
+          if (!message) {
+            return;
+          }
+          window.toastifyNotify(message, category);
+        });
+      })();
+    </script>
     <script>
       (function syncAdminFlag() {
         var body = document.body;
@@ -115,21 +160,5 @@
       async
       src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
     ></script>
-    <script>
-      (function dismissFlashes() {
-        var flashes = document.querySelectorAll(".flash");
-        if (!flashes.length) {
-          return;
-        }
-        setTimeout(function () {
-          flashes.forEach(function (node) {
-            node.classList.add("fade-out");
-            setTimeout(function () {
-              node.remove();
-            }, 600);
-          });
-        }, 3500);
-      })();
-    </script>
   </body>
 </html>

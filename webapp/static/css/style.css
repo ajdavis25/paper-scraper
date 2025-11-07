@@ -326,41 +326,19 @@ section.unsubscribe-section {
   border-radius: 6px;
 }
 
-.flash-messages {
-  margin-top: 1em;
-  display: flex;
-  flex-direction: column;
-  gap: 0.7em;
-  align-items: center;
+.toastify-success {
+  background: #1e7e34 !important;
+  color: #fff !important;
 }
 
-.flash {
-  padding: 0.6em 0.9em;
-  border-radius: 6px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-  width: min(540px, 100%);
-  display: block;
-  opacity: 1;
-  transition: opacity 0.4s ease;
+.toastify-error {
+  background: #b22222 !important;
+  color: #fff !important;
 }
 
-.flash.fade-out {
-  opacity: 0;
-}
-
-.flash.success {
-  background: #e8f8f0;
-  color: #1e7e34;
-}
-
-.flash.error {
-  background: #fbeaea;
-  color: #b22222;
-}
-
-.flash.info {
-  background: #eef4fb;
-  color: #1d4e89;
+.toastify-info {
+  background: #1d4e89 !important;
+  color: #fff !important;
 }
 
 #sub-status {

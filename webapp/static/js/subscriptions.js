@@ -5,25 +5,24 @@ document.addEventListener("DOMContentLoaded", () => {
 
   if (!form) return;
 
-  const msgBox = document.createElement("p");
-  msgBox.id = "sub-status";
-  msgBox.style.opacity = 0;
-  msgBox.style.transition = "opacity 0.6s ease-in-out";
-  msgBox.style.marginTop = "1em";
-  form.after(msgBox);
-
-  const showMessage = (text, color) => {
-    msgBox.textContent = text;
-    msgBox.style.color = color;
-    msgBox.style.opacity = 1;
-    setTimeout(() => (msgBox.style.opacity = 0), 3000);
+  const showMessage = (text, type = "info") => {
+    if (window.toastifyNotify) {
+      window.toastifyNotify(text, type);
+    } else if (window.Toastify) {
+      Toastify({
+        text,
+        className: "toastify-" + type,
+      }).showToast();
+    } else {
+      console.log(`[${type}] ${text}`);
+    }
   };
 
   form.addEventListener("submit", (e) => {
     e.preventDefault();  // prevent full page reload
 
     const email = form.querySelector("input[name='email']").value.trim();
-    if (!email) return showMessage("please enter your email", "red");
+    if (!email) return showMessage("please enter your email", "error");
 
     fetch(window.location.pathname, {
       method: "POST",
@@ -32,15 +31,15 @@ document.addEventListener("DOMContentLoaded", () => {
     })
       .then((r) => r.json())
       .then((data) => {
-        const color =
+        const type =
           data.status === "success"
-            ? "green"
+            ? "success"
             : data.status === "info"
-            ? "#555"
-            : "red";
-        showMessage(data.message, color);
+            ? "info"
+            : "error";
+        showMessage(data.message, type);
         form.reset();
       })
-      .catch(() => showMessage("server error — try again later.", "red"));
+      .catch(() => showMessage("server error — try again later.", "error"));
   });
 });

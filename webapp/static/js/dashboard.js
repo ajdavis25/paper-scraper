@@ -2,7 +2,13 @@ document.addEventListener("DOMContentLoaded", () => {
   console.log("dashboard.js loaded");
 
   const form = document.getElementById("prefs-form");
-  const status = document.getElementById("save-status");
+  const notify = (text, type = "info") => {
+    if (window.toastifyNotify) {
+      window.toastifyNotify(text, type);
+    } else {
+      console.log(`[${type}] ${text}`);
+    }
+  };
   const parsePrefsResponse = (response) => {
     if (response.status === 401) {
       window.location.href = "/login";
@@ -16,7 +22,9 @@ document.addEventListener("DOMContentLoaded", () => {
   // feedback form submission
   // ===============================
   const feedbackForm = document.getElementById("feedback-form");
-  const feedbackStatus = document.getElementById("feedback-status");
+  const setFeedbackStatus = (message, type) => {
+    notify(message, type);
+  };
 
   if (feedbackForm) {
     feedbackForm.addEventListener("submit", (e) => {
@@ -29,10 +37,7 @@ document.addEventListener("DOMContentLoaded", () => {
       };
 
       if (!payload.message) {
-        feedbackStatus.textContent = "please enter a message before sending.";
-        feedbackStatus.className = "save-status error";
-        feedbackStatus.style.opacity = 1;
-        setTimeout(() => (feedbackStatus.style.opacity = 0), 3000);
+        setFeedbackStatus("please enter a message before sending.", "error");
         return;
       }
 
@@ -43,17 +48,11 @@ document.addEventListener("DOMContentLoaded", () => {
       })
         .then((r) => r.json())
         .then((data) => {
-          feedbackStatus.textContent = data.message || "feedback sent!";
-          feedbackStatus.className = "save-status success";
-          feedbackStatus.style.opacity = 1;
-          setTimeout(() => (feedbackStatus.style.opacity = 0), 3000);
+          setFeedbackStatus(data.message || "feedback sent!", "success");
           feedbackForm.reset();
         })
         .catch(() => {
-          feedbackStatus.textContent = "error sending feedback.";
-          feedbackStatus.className = "save-status error";
-          feedbackStatus.style.opacity = 1;
-          setTimeout(() => (feedbackStatus.style.opacity = 0), 4000);
+          setFeedbackStatus("error sending feedback.", "error");
         });
     });
   }
@@ -62,17 +61,8 @@ document.addEventListener("DOMContentLoaded", () => {
   // ===============================
   // helper: fade in message
   // ===============================
-  const showMessage = (msg, color = "green") => {
-    if (!status) return;
-    status.textContent = msg;
-    status.style.color = color;
-    status.style.opacity = 0;
-    status.style.transition = "opacity 0.6s ease-in-out";
-    requestAnimationFrame(() => (status.style.opacity = 1));
-
-    setTimeout(() => {
-      status.style.opacity = 0;
-    }, 3000);
+  const showMessage = (msg, type = "success") => {
+    notify(msg, type);
   };
 
 
@@ -143,7 +133,7 @@ document.addEventListener("DOMContentLoaded", () => {
             });
           }
 
-          showMessage("loaded your saved preferences.", "#555");
+          showMessage("loaded your saved preferences.", "info");
         }
       })
       .catch(() => console.log("no saved prefs found."));
@@ -180,10 +170,10 @@ document.addEventListener("DOMContentLoaded", () => {
       })
         .then((r) => r.json())
         .then(() => {
-          showMessage("preferences saved successfully!", "green");
+          showMessage("preferences saved successfully!", "success");
         })
         .catch(() => {
-          showMessage("error saving preferences.", "red");
+          showMessage("error saving preferences.", "error");
         });
     });
   }
