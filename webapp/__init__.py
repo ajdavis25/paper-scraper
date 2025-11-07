@@ -1,5 +1,6 @@
 from flask import Flask
-from flask_login import LoginManager
+from flask_login import LoginManager, current_user
+from sqlalchemy import func
 import os, sys
 from pathlib import Path
 
@@ -72,3 +73,14 @@ def create_app():
 
     _app_instance = app
     return app
+    @app.context_processor
+    def inject_subscription_state():
+        subscribed = False
+        if current_user.is_authenticated:
+            email = (current_user.email or "").strip().lower()
+            if email:
+                subscribed = (
+                    Subscriber.query.filter(func.lower(Subscriber.email) == email).first()
+                    is not None
+                )
+        return dict(nav_user_is_subscribed=subscribed)

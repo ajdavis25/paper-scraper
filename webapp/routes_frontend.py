@@ -12,6 +12,177 @@ from shared.utils import get_user_by_email, render_inline_math_html
 from shared.mail import send_reset_email, get_serializer, send_email
 import os
 
+SUBCATEGORY_EXPANSIONS = {
+    "astro-ph": [
+        "astro-ph.CO",
+        "astro-ph.EP",
+        "astro-ph.GA",
+        "astro-ph.HE",
+        "astro-ph.IM",
+        "astro-ph.SR",
+    ],
+    "cond-mat": [
+        "cond-mat.dis-nn",
+        "cond-mat.mes-hall",
+        "cond-mat.mtrl-sci",
+        "cond-mat.other",
+        "cond-mat.quant-gas",
+        "cond-mat.soft",
+        "cond-mat.stat-mech",
+        "cond-mat.str-el",
+        "cond-mat.supr-con",
+    ],
+    "cs": [
+        "cs.AI",
+        "cs.AR",
+        "cs.CC",
+        "cs.CE",
+        "cs.CG",
+        "cs.CL",
+        "cs.CR",
+        "cs.CV",
+        "cs.CY",
+        "cs.DB",
+        "cs.DC",
+        "cs.DL",
+        "cs.DM",
+        "cs.DS",
+        "cs.ET",
+        "cs.FL",
+        "cs.GL",
+        "cs.GR",
+        "cs.GT",
+        "cs.HC",
+        "cs.IR",
+        "cs.IT",
+        "cs.LG",
+        "cs.LO",
+        "cs.MA",
+        "cs.MM",
+        "cs.MS",
+        "cs.NA",
+        "cs.NE",
+        "cs.NI",
+        "cs.OH",
+        "cs.OS",
+        "cs.PF",
+        "cs.PL",
+        "cs.RO",
+        "cs.SC",
+        "cs.SD",
+        "cs.SE",
+        "cs.SI",
+        "cs.SY",
+    ],
+    "econ": [
+        "econ.EM",
+        "econ.GN",
+        "econ.TH",
+    ],
+    "eess": [
+        "eess.AS",
+        "eess.IV",
+        "eess.SP",
+        "eess.SY",
+    ],
+    "math": [
+        "math.AC",
+        "math.AG",
+        "math.AP",
+        "math.AT",
+        "math.CA",
+        "math.CO",
+        "math.CT",
+        "math.CV",
+        "math.DG",
+        "math.DS",
+        "math.FA",
+        "math.GM",
+        "math.GN",
+        "math.GR",
+        "math.GT",
+        "math.HO",
+        "math.IT",
+        "math.KT",
+        "math.LO",
+        "math.MG",
+        "math.MP",
+        "math.NA",
+        "math.NT",
+        "math.OA",
+        "math.OC",
+        "math.PR",
+        "math.QA",
+        "math.RA",
+        "math.RT",
+        "math.SG",
+        "math.SP",
+        "math.ST",
+    ],
+    "nlin": [
+        "nlin.AO",
+        "nlin.CD",
+        "nlin.CG",
+        "nlin.PS",
+        "nlin.SI",
+    ],
+    "physics": [
+        "physics.acc-ph",
+        "physics.ao-ph",
+        "physics.app-ph",
+        "physics.atm-clus",
+        "physics.atom-ph",
+        "physics.bio-ph",
+        "physics.chem-ph",
+        "physics.class-ph",
+        "physics.comp-ph",
+        "physics.data-an",
+        "physics.ed-ph",
+        "physics.flu-dyn",
+        "physics.gen-ph",
+        "physics.geo-ph",
+        "physics.hist-ph",
+        "physics.ins-det",
+        "physics.med-ph",
+        "physics.optics",
+        "physics.plasm-ph",
+        "physics.pop-ph",
+        "physics.soc-ph",
+        "physics.space-ph",
+    ],
+    "q-bio": [
+        "q-bio.BM",
+        "q-bio.CB",
+        "q-bio.GN",
+        "q-bio.MN",
+        "q-bio.NC",
+        "q-bio.OT",
+        "q-bio.PE",
+        "q-bio.QM",
+        "q-bio.SC",
+        "q-bio.TO",
+    ],
+    "q-fin": [
+        "q-fin.CP",
+        "q-fin.EC",
+        "q-fin.GN",
+        "q-fin.MF",
+        "q-fin.PM",
+        "q-fin.PR",
+        "q-fin.RM",
+        "q-fin.ST",
+        "q-fin.TR",
+    ],
+    "stat": [
+        "stat.AP",
+        "stat.CO",
+        "stat.ME",
+        "stat.ML",
+        "stat.OT",
+        "stat.TH",
+    ],
+}
+
 frontend = Blueprint("frontend", __name__)
 
 
@@ -36,6 +207,13 @@ def login():
             user = get_user_by_email(email)
             if user and check_password_hash(user.password_hash, password):
                 login_user(user)
+                # ensure logged-in users are in subscriber list
+                normalized_email = email.strip().lower()
+                if normalized_email and not Subscriber.query.filter(
+                    func.lower(Subscriber.email) == normalized_email
+                ).first():
+                    db.session.add(Subscriber(email=normalized_email))
+                    db.session.commit()
                 session["is_admin"] = bool(user.is_admin)
                 flash("logged in successfully.", "success")
                 return redirect(url_for("frontend.index"))
@@ -175,11 +353,23 @@ def signup():
             flash("user already exists. try logging in instead.")
             return redirect(url_for("frontend.login"))
 
-        # hash and store the password
-        hashed_pw = generate_password_hash(password)
-        new_user = User(email=email, password_hash=hashed_pw)
-        db.session.add(new_user)
-        db.session.commit()
+        try:
+            # hash and store the password
+            hashed_pw = generate_password_hash(password)
+            new_user = User(email=email, password_hash=hashed_pw)
+            db.session.add(new_user)
+
+            # automatically subscribe new accounts if they are not already in the list
+            existing_sub = Subscriber.query.filter(func.lower(Subscriber.email) == email).first()
+            if not existing_sub:
+                db.session.add(Subscriber(email=email))
+
+            db.session.commit()
+        except Exception as exc:
+            db.session.rollback()
+            print(f"[signup] error saving new user: {exc}")
+            flash("we couldn't finish sign-up. please try again in a moment.", "error")
+            return redirect(url_for("frontend.signup"))
 
         flash("signup successful! you can now log in.")
         return redirect(url_for("frontend.login"))
@@ -281,7 +471,17 @@ def user_feedback():
     html = f"<p><strong>{name}</strong> &lt;{email}&gt;</p><p>{message}</p>"
 
     # send mail
-    if not send_email(cfg, subject, text, html):
+    mail_section = cfg.get("mail") or cfg.get("output", {}).get("email") or {}
+    feedback_to = (
+        cfg.get("feedback_email")
+        or cfg.get("feedback", {}).get("to_addr")
+        or mail_section.get("username")
+        or mail_section.get("from_addr")
+        or os.getenv("FEEDBACK_EMAIL")
+    )
+    to_list = [feedback_to] if feedback_to else None
+
+    if not send_email(cfg, subject, text, html, to_override=to_list):
         print("[send-feedback] mail send failed")
         # still return success since it was saved in db
         return jsonify({"message": "feedback stored but email failed"}), 202
@@ -313,7 +513,30 @@ def recommendations():
         prefs = {"keywords": [], "categories": ["astro-ph"], "min_score": 1.0}
 
     keywords = prefs.get("keywords") or []
-    categories = prefs.get("categories") or ["astro-ph"]
+    raw_categories = prefs.get("categories") or ["astro-ph"]
+    selected_categories = [c.strip() for c in raw_categories if c and c.strip()]
+    if not selected_categories:
+        selected_categories = ["astro-ph"]
+
+    def _expand_categories(selected):
+        expanded = []
+        seen = set()
+        for cat_name in selected:
+            key = cat_name.lower()
+            expansions = SUBCATEGORY_EXPANSIONS.get(key)
+            if expansions:
+                for sub in expansions:
+                    sub_clean = sub.strip()
+                    if sub_clean and sub_clean not in seen:
+                        expanded.append(sub_clean)
+                        seen.add(sub_clean)
+                continue
+            if cat_name not in seen:
+                expanded.append(cat_name)
+                seen.add(cat_name)
+        return expanded
+
+    categories = _expand_categories(selected_categories) or ["astro-ph"]
     min_score = prefs.get("min_score", 1.0) or 1.0
 
     if not keywords:
@@ -328,6 +551,33 @@ def recommendations():
     if not encoded_terms:
         return render_template("recommendations.html", recs=[], message="no valid keywords provided.")
 
+    def _display_category(preference_cat, paper):
+        """
+        prefer the most specific arXiv category that matches the user's
+        requested category (e.g., astro-ph.CO over astro-ph).
+        """
+        pref = (preference_cat or "").strip().lower()
+        paper_categories = paper.get("categories") or []
+        if pref:
+            matching = []
+            for term in paper_categories:
+                term_clean = (term or "").strip()
+                if not term_clean:
+                    continue
+                term_lower = term_clean.lower()
+                if term_lower == pref or term_lower.startswith(f"{pref}."):
+                    matching.append(term_clean)
+            if matching:
+                # longer strings have the subcategory suffix (astro-ph.CO)
+                return max(matching, key=len)
+
+        primary = (paper.get("primary_category") or "").strip()
+        if primary:
+            return primary
+        if paper_categories:
+            return paper_categories[0]
+        return preference_cat or ""
+
     all_recs = []
     for cat in categories:
         cat = cat.strip()
@@ -337,7 +587,7 @@ def recommendations():
         query = "+OR+".join(encoded_terms) + f"+AND+cat:{quote_plus(cat)}"
         url = (
             "https://export.arxiv.org/api/query?"
-            f"search_query={query}&start=0&max_results=25&sortBy=relevance&sortOrder=descending"
+            f"search_query={query}&start=0&max_results=25&sortBy=submittedDate&sortOrder=descending"
         )
         print(f"[recommendations] fetching from {cat}: {url}")
 
@@ -345,7 +595,7 @@ def recommendations():
             recs = fetch_arxiv_feed(url)
             # tag category
             for r in recs:
-                r["category"] = cat
+                r["category"] = _display_category(cat, r)
             all_recs.extend(recs)
         except Exception as e:
             print(f"[recommendations] error fetching {cat}: {e}")
@@ -383,8 +633,9 @@ def recommendations():
         summary_html, _ = render_inline_math_html(summary_text or "")
         rec["summary_html"] = Markup(summary_html)
 
+    display_labels = selected_categories or categories
     msg = (
-        f"showing {len(scored)} recent papers across {', '.join(categories)} "
+        f"showing {len(scored)} recent papers across {', '.join(display_labels)} "
         f"with score >= {min_score}."
         if scored
         else "no papers met your minimum relevance threshold."
@@ -403,14 +654,7 @@ def _record_recommendation_feedback(email: str, arxiv_id: str, liked: bool, sour
     if not email or not arxiv_id:
         raise ValueError("missing email or arxiv_id")
 
-    user = (
-        User.query.filter(func.lower(User.email) == email)
-        .first()
-    )
-    if not user:
-        user = User(email=email, password_hash="")
-        db.session.add(user)
-        db.session.flush()
+    user = User.query.filter(func.lower(User.email) == email).first()
 
     paper = Paper.query.filter_by(arxiv_id=arxiv_id).first()
     if not paper:
@@ -418,12 +662,15 @@ def _record_recommendation_feedback(email: str, arxiv_id: str, liked: bool, sour
         db.session.add(paper)
         db.session.flush()
 
-    pref = UserPreference.query.filter_by(user_id=user.id, paper_id=paper.id).first()
-    if not pref:
-        pref = UserPreference(user_id=user.id, paper_id=paper.id, liked=liked)
-        db.session.add(pref)
+    if user:
+        pref = UserPreference.query.filter_by(user_id=user.id, paper_id=paper.id).first()
+        if not pref:
+            pref = UserPreference(user_id=user.id, paper_id=paper.id, liked=liked)
+            db.session.add(pref)
+        else:
+            pref.liked = liked
     else:
-        pref.liked = liked
+        print(f"[recommendation-feedback] no user account for {email}; skipping preference sync.")
 
     fb_entry = Feedback(
         name="system",

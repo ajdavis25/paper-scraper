@@ -152,6 +152,34 @@ class PreferenceConfig(db.Model):
         return config
 
 
+class GmailWatchState(db.Model, TimestampMixin):
+    __tablename__ = "gmail_watch_state"
+
+    id = db.Column(db.Integer, primary_key=True)
+    history_id = db.Column(db.String(128), nullable=True)
+    label_id = db.Column(db.String(128), nullable=True)
+
+    @classmethod
+    def get_state(cls) -> "GmailWatchState":
+        """return the singleton state row (creates it with null history if missing)."""
+        state = cls.query.first()
+        if not state:
+            state = cls()
+            db.session.add(state)
+            db.session.commit()
+        return state
+
+    @classmethod
+    def update_history(cls, history_id: str | None, label_id: str | None = None):
+        """persist the most recent Gmail history id (and optional label)."""
+        state = cls.get_state()
+        if history_id:
+            state.history_id = str(history_id)
+        if label_id:
+            state.label_id = label_id
+        db.session.commit()
+
+
 def ensure_preference_config_schema():
     """
     ensure the preference_config table has a user_id column so we can store

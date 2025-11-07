@@ -18,7 +18,7 @@ endblock %} {% block content %}
     {% if rec.category %}
     <span class="category-tag">{{ rec.category }}</span>
     {% endif %} {% if rec.score is defined %}
-    <span class="score-tag">score: {{ rec.score }}</span>
+    <span class="score-tag">score: {{ "%.1f"|format(rec.score|float) }}</span>
     {% endif %}
     <span class="date">{{ rec.published }}</span>
   </div>

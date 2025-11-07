@@ -51,8 +51,12 @@ def send_reset_email(email, link):
     mail.send(msg)
 
 
-def send_email(cfg, subject, text, html=None):
-    """send email via gmail smtp using config.yaml -> output.email"""
+def send_email(cfg, subject, text, html=None, *, to_override=None):
+    """send email via gmail smtp using config.yaml -> output.email.
+
+    `cfg` may be the full config dict or just the `output.email` section.
+    Pass `to_override` (iterable or string) to override the recipient list.
+    """
     try:
         mail_cfg = (
             cfg.get("mail")
@@ -68,14 +72,18 @@ def send_email(cfg, subject, text, html=None):
         username = mail_cfg.get("username")
         password = os.getenv(mail_cfg.get("password_env", "EMAIL_PASS"))
         from_addr = mail_cfg.get("from_addr", username)
-        to_addrs = mail_cfg.get("to_addrs") or [username]
+        recipients = to_override or mail_cfg.get("to_addrs") or [username]
+        if isinstance(recipients, str):
+            recipients = [recipients]
+        elif recipients is None:
+            recipients = [username] if username else []
 
         if not username or not password:
-            print("[mailer] missing username or password — printing instead")
-            print(f"TO: {to_addrs}\nSUBJECT: {subject}\n{text}")
+            print("[mailer] missing username or password - printing instead")
+            print(f"TO: {recipients}\nSUBJECT: {subject}\n{text}")
             return True
 
-        print(f"[mailer] sending real email from {from_addr} to {to_addrs}")
+        print(f"[mailer] sending real email from {from_addr} to {recipients}")
         print(f"[mailer] subject: {subject}")
         print(f"[mailer] using smtp: {server}:{port} with STARTTLS")
 
@@ -83,7 +91,7 @@ def send_email(cfg, subject, text, html=None):
         msg = MIMEMultipart("alternative")
         msg["subject"] = f"{mail_cfg.get('subject_prefix', '')} {subject}".strip()
         msg["from"] = from_addr
-        msg["to"] = ", ".join(to_addrs)
+        msg["to"] = ", ".join(recipients)
 
         part1 = MIMEText(text, "plain", "utf-8")
         msg.attach(part1)
@@ -97,7 +105,7 @@ def send_email(cfg, subject, text, html=None):
             if mail_cfg.get("use_starttls", True):
                 smtp.starttls()
             smtp.login(username, password)
-            smtp.sendmail(from_addr, to_addrs, msg.as_bytes())
+            smtp.sendmail(from_addr, recipients, msg.as_bytes())
 
         print("[mailer] email sent successfully")
         return True

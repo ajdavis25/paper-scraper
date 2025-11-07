@@ -33,8 +33,12 @@
     <header>
       <h1><a href="/">astro-ph digest</a></h1>
       <nav>
+        {% if not current_user.is_authenticated or not nav_user_is_subscribed %}
         <a href="/subscribe">subscribe</a>
+        {% endif %}
+        {% if not current_user.is_authenticated or nav_user_is_subscribed %}
         <a href="/unsubscribe">unsubscribe</a>
+        {% endif %}
         <a href="/info">info</a>
 
         {% if current_user.is_authenticated %}

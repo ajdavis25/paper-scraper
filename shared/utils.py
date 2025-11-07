@@ -529,13 +529,35 @@ def fetch_arxiv_feed(url):
         r = requests.get(url, timeout=10)
         r.raise_for_status()
         root = ET.fromstring(r.text)
-        ns = {"atom": "http://www.w3.org/2005/Atom"}
+        ns = {
+            "atom": "http://www.w3.org/2005/Atom",
+            "arxiv": "http://arxiv.org/schemas/atom",
+        }
 
         entries = []
         for entry in root.findall("atom:entry", ns):
             title = entry.find("atom:title", ns)
             summary = entry.find("atom:summary", ns)
             link = entry.find("atom:id", ns)
+            published = entry.find("atom:published", ns)
+
+            author_names = []
+            for author in entry.findall("atom:author", ns):
+                name_el = author.find("atom:name", ns)
+                if name_el is not None and (name_text := (name_el.text or "").strip()):
+                    author_names.append(name_text)
+
+            categories = [
+                cat.attrib.get("term", "").strip()
+                for cat in entry.findall("atom:category", ns)
+                if cat.attrib.get("term")
+            ]
+            primary_el = entry.find("arxiv:primary_category", ns)
+            primary_category = (
+                (primary_el.attrib.get("term") or "").strip()
+                if primary_el is not None
+                else (categories[0] if categories else "")
+            )
 
             summary_text = summary.text.strip() if summary is not None else ""
             entries.append(
@@ -543,6 +565,11 @@ def fetch_arxiv_feed(url):
                     "title": title.text.strip() if title is not None else "(no title)",
                     "summary": wrap_inline_tex(summary_text),
                     "link": link.text.strip() if link is not None else "#",
+                    "published": published.text.strip() if published is not None else "",
+                    "authors": author_names,
+                    "categories": categories,
+                    "primary_category": primary_category,
+                    "category": primary_category,
                 }
             )
 

@@ -1,0 +1,35 @@
+name: Renew Gmail watch (weekly)
+
+on:
+  schedule:
+    - cron: "0 9 * * 1"  # every Monday at 09:00 UTC
+  workflow_dispatch:
+
+jobs:
+  renew-watch:
+    runs-on: ubuntu-latest
+    env:
+      GMAIL_PUSH_CLIENT_ID: ${{ secrets.GMAIL_PUSH_CLIENT_ID }}
+      GMAIL_PUSH_CLIENT_SECRET: ${{ secrets.GMAIL_PUSH_CLIENT_SECRET }}
+      GMAIL_PUSH_REFRESH_TOKEN: ${{ secrets.GMAIL_PUSH_REFRESH_TOKEN }}
+      GMAIL_WATCH_TOPIC: ${{ secrets.GMAIL_WATCH_TOPIC }}
+      GMAIL_WATCH_LABEL: ${{ secrets.GMAIL_WATCH_LABEL }}
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install requirements
+        run: |
+          set -e
+          pip install -r requirements.txt
+
+      - name: Run gmail watch renewal
+        run: |
+          set -e
+          python scripts/gmail_watch.py --topic "${GMAIL_WATCH_TOPIC}" --label "${GMAIL_WATCH_LABEL}"

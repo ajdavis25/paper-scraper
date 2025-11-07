@@ -9,8 +9,12 @@
     filtered by relevance and sent every morning around 8 am cst.
   </p>
   <div style="margin-top: 1.5em">
+    {% if not current_user.is_authenticated or not nav_user_is_subscribed %}
     <a class="btn" href="/subscribe">subscribe</a>
+    {% endif %}
+    {% if not current_user.is_authenticated or nav_user_is_subscribed %}
     <a class="btn btn-secondary" href="/unsubscribe">unsubscribe</a>
+    {% endif %}
     <button class="btn" onclick="window.location.href='/dashboard'">
       dashboard
     </button>
