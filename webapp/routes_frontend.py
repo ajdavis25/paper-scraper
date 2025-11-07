@@ -689,7 +689,7 @@ def user_feedback():
         return jsonify({"message": "feedback stored but mail config missing"}), 202
 
     # compose email
-    subject = f"[astro-ph feedback] from {name}"
+    subject = f"[arxiv feedback] from {name}"
     text = f"{name} <{email}> wrote:\n\n{message}"
     html = f"<p><strong>{name}</strong> &lt;{email}&gt;</p><p>{message}</p>"
 

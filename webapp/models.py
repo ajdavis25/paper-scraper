@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""models.py — ORM models for astro-ph digest backend."""
+"""models.py — ORM models for arxiv digest backend."""
 from datetime import datetime
 from flask_login import UserMixin
 from shared.db import db

@@ -1,12 +1,12 @@
-{% extends "base.html" %} {% block title %}home — astro-ph digest{% endblock %}
-{% block content %}
+{% extends "base.html" %} {% block title %}home — arxiv digest{% endblock %} {%
+block content %}
 <section>
   <h2>welcome!</h2>
   <p>
     the <strong>arxiv digest</strong> delivers a daily, curated selection of
     astrophysics papers from
-    <a href="https://arxiv.org/" target="_blank">arXiv</a>,
-    filtered by relevance and sent every morning around 8 am cst.
+    <a href="https://arxiv.org/" target="_blank">arXiv</a>, filtered by
+    relevance and sent every morning around 8 am cst.
   </p>
   <div style="margin-top: 1.5em">
     {% if not current_user.is_authenticated or not nav_user_is_subscribed %}

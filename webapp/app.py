@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-app.py — flask entrypoint for astro-ph digest
+app.py — flask entrypoint for arxiv digest
 compatible with flask cli and vercel/wsgi deploy.
 """
 import os, sys, traceback

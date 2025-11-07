@@ -1,5 +1,5 @@
 """
-astro-ph digest package initializer.
+arxiv digest package initializer.
 ensures dotenv is loaded early for all modules.
 """
 from dotenv import load_dotenv

@@ -1,6 +1,6 @@
 <p align="center">
   <img src="https://github.com/ajdavis25/paper-scraper/blob/main/assets/banner.png" 
-       alt="astro-ph digest bot — built out of spite 💥" 
+       alt="arxiv digest bot — built out of spite 💥" 
        width="100%">
 </p>
 
@@ -35,7 +35,7 @@ paper_scraper/
 │   ├── check_subscriptions.yml      # validates and cleans up subscriber list on schedule
 │   └── daily_digest.yml             # runs the daily paper curation + email digest pipeline
 ├── assets/                          # branding and static assets (banner.png, icons, etc.)
-├── bot.py                           # main entrypoint for running the daily astro-ph digest bot
+├── bot.py                           # main entrypoint for running the daily arxiv digest bot
 ├── config.py
 ├── config.yaml                      # central configuration (arXiv filters, smtp settings, output options)
 ├── curator.py                       # handles paper ranking, keyword filtering, and relevance scoring
@@ -78,8 +78,8 @@ paper_scraper/
 
 1. clone this repo:
    ```bash
-   `git clone https://github.com/ajdavis25/astro-ph-digest-bot.git`
-   `cd astroph-bot`
+   `git clone https://github.com/ajdavis25/paper-scraper.git`
+   `cd paper_scraper`
    ```
 2. create a virtual environment:
     ```bash
@@ -157,7 +157,7 @@ if you're setting this up for a department or research group:
    - `EMAIL_PASS` = the app password from step 2
 
 4. the bot will automatically run daily at **8 am central** and email all subscribed users.  
-   to test manually, go to the **actions** tab and run **“daily astro-ph digest”** using the “run workflow” button.
+   to test manually, go to the **actions** tab and run **“daily arxiv digest”** using the “run workflow” button.
 
 > optional: to enable subscription emails, upload your gmail API `credentials.json` and `token.json` inside a `secrets/` folder (not tracked by git).
 
