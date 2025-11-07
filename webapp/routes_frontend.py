@@ -451,21 +451,20 @@ def _env_mail_config():
         recipients = [from_addr]
 
     return {
-        "output": {
-            "email": {
-                "from_addr": from_addr,
-                "to_addrs": recipients,
-                "subject_prefix": os.getenv("EMAIL_SUBJECT_PREFIX", "[astro-ph feedback]"),
-                "smtp_host": os.getenv("SMTP_HOST", "smtp.gmail.com"),
-                "smtp_port": port,
-                "use_starttls": os.getenv("SMTP_USE_STARTTLS", "true").lower() not in {"false", "0", "no"},
-                "username": from_addr,
-                "password_env": os.getenv("PASSWORD_ENV", "EMAIL_PASS"),
-            }
-        }
+        "mail": {
+            "smtp_host": os.getenv("SMTP_HOST", "smtp.gmail.com"),
+            "smtp_port": port,
+            "use_starttls": os.getenv("SMTP_USE_STARTTLS", "true").lower() not in {"false", "0", "no"},
+            "username": from_addr,
+            "from_addr": from_addr,
+            "password_env": os.getenv("PASSWORD_ENV", "EMAIL_PASS"),
+            "to_addrs": recipients,
+        },
+        "feedback_email": os.getenv("FEEDBACK_EMAIL"),
     }
 
 
+@frontend.route("/send-feedback", methods=["GET", "POST"])
 def user_feedback():
     """receives user feedback, stores it in the database, and emails it to the bot."""
     import yaml
