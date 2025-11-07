@@ -613,8 +613,8 @@ def _send_subscription_email(to_email: str, kind: str = "welcome") -> bool:
         )
         html = (
             "<p>welcome aboard! you'll now receive the daily <strong>digest</strong>."
-            "</p><p>visit <a href=\"https://paperscraper-one.vercel.app/\">paperscraper-one.vercel.app</a> to tweak your "
-            "preferences and curate the papers you care about.</p><p>clear skies!</p>"
+            "</p><p>sign up at <a href=\"https://paperscraper-one.vercel.app/\">paperscraper-one.vercel.app</a> to claim your account "
+            "and begin customizing your preferences and curate the papers you care about.</p><p>clear skies!</p>"
         )
 
     if not send_email(cfg, subject, text, html, to_override=[target]):
