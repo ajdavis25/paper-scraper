@@ -5,6 +5,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from itsdangerous import SignatureExpired, BadSignature
 from sqlalchemy import func
 from markupsafe import Markup
+import yaml
 
 from shared.db import db
 from webapp.account_utils import ensure_user_stub
@@ -283,6 +284,7 @@ def subscribe():
             db.session.add(new_sub)
             ensure_user_stub(email, commit=False)
             db.session.commit()
+            _send_subscription_email(email, "welcome")
             return jsonify({"status": "success", "message": "subscribed successfully!"})
         except Exception as e:
             print(f"[subscribe] error: {e}")
@@ -293,30 +295,58 @@ def subscribe():
 
 
 @frontend.route("/unsubscribe", methods=["GET", "POST"])
+
 def unsubscribe():
+
     if request.method == "POST":
+
         if request.is_json:
+
             data = request.get_json(force=True)
+
             email = data.get("email", "").strip().lower()
+
         else:
+
             email = request.form.get("email", "").strip().lower()
 
+
+
         if not email:
+
             return jsonify({"status": "error", "message": "please enter a valid email."}), 400
 
+
+
         try:
-            sub = Subscriber.query.filter_by(email=email).first()
+
+            sub = Subscriber.query.filter(func.lower(Subscriber.email) == email).first()
+
             if not sub:
-                return jsonify({"status": "info", "message": "email not found — you may already be unsubscribed."})
+
+                return jsonify({"status": "info", "message": "email not found -- you may already be unsubscribed."})
+
+
 
             db.session.delete(sub)
+
             db.session.commit()
+
             print(f"[unsubscribe] removed {email}")
-            return jsonify({"status": "success", "message": "you’ve been unsubscribed. farewell!"})
+
+            _send_subscription_email(email, "farewell")
+
+            return jsonify({"status": "success", "message": "you have been unsubscribed. farewell!"})
+
         except Exception as e:
+
             print(f"[unsubscribe] error: {e}")
+
             db.session.rollback()
+
             return jsonify({"status": "error", "message": "server error"}), 500
+
+
 
     return render_template("unsubscribe.html")
 
@@ -385,6 +415,7 @@ def signup():
                 return redirect(url_for("frontend.signup"))
 
             login_user(existing_user)
+            _send_subscription_email(email, "welcome")
             flash("account claimed! welcome aboard!", "success")
             return redirect(url_for("frontend.dashboard_redirect"))
 
@@ -407,6 +438,7 @@ def signup():
             return redirect(url_for("frontend.signup"))
 
         login_user(new_user)
+        _send_subscription_email(email, "welcome")
         flash("sign up complete — welcome aboard!", "success")
         return redirect(url_for("frontend.dashboard_redirect"))
 
@@ -500,11 +532,69 @@ def _env_mail_config():
     }
 
 
+def _load_mail_config():
+    cfg_path = os.path.join(os.path.dirname(__file__), "..", "config.yaml")
+    try:
+        with open(cfg_path, "r", encoding="utf-8") as f:
+            cfg = yaml.safe_load(f) or {}
+            return cfg
+    except Exception as e:
+        print(f"[mail-config] yaml error: {e}")
+        fallback = _env_mail_config()
+        if not fallback:
+            print("[mail-config] no config.yaml and no MAIL_/EMAIL_ env vars available.")
+        return fallback
+
+
+def _send_subscription_email(to_email: str, kind: str = "welcome") -> bool:
+    target = (to_email or "").strip()
+    if not target:
+        return False
+
+    cfg = _load_mail_config()
+    if not cfg:
+        return False
+
+    if kind == "farewell":
+        subject = "you've been unsubscribed from digest"
+        text = (
+            "we've removed you from the digest mailing list.\n\n"
+            "if this was a mistake, you can rejoin any time at https://paperscraper-one.vercel.app/"
+            " or by emailing arxivastrophbot@gmail.com with the subject 'subscribe'.\n\n"
+            "-- digest bot"
+        )
+        html = (
+            "<p>we've removed you from the <strong>digest</strong> mailing list.</p>"
+            "<p>changed your mind? hop back in at "
+            '<a href="https://paperscraper-one.vercel.app/">paperscraper-one.vercel.app</a> or send an email with the subject '
+            "<code>subscribe</code> to arxivastrophbot@gmail.com.</p>"
+            "<p>clear skies!</p>"
+        )
+    else:
+        subject = "welcome to the digest"
+        text = (
+            "welcome aboard!\n\n"
+            "you'll now receive the daily digest with curated papers.\n"
+            "log in at https://paperscraper-one.vercel.app/ to set your preferences or send feedback anytime.\n\n"
+            "-- digest bot"
+        )
+        html = (
+            "<p>welcome aboard! you'll now receive the daily <strong>digest</strong>."
+            "</p><p>visit <a href=\"https://paperscraper-one.vercel.app/\">paperscraper-one.vercel.app</a> to tweak your "
+            "preferences and curate the papers you care about.</p><p>clear skies!</p>"
+        )
+
+    if not send_email(cfg, subject, text, html, to_override=[target]):
+        print(f"[subscription-email] failed to send {kind} email to {target}")
+        return False
+
+    print(f"[subscription-email] sent {kind} email to {target}")
+    return True
+
+
 @frontend.route("/send-feedback", methods=["GET", "POST"])
 def user_feedback():
     """receives user feedback, stores it in the database, and emails it to the bot."""
-    import yaml
-
     if request.method == "GET":
         return render_template("feedback_form.html")
 
@@ -530,16 +620,9 @@ def user_feedback():
         db.session.rollback()
 
     # try to load mail config
-    cfg_path = os.path.join(os.path.dirname(__file__), "..", "config.yaml")
-    try:
-        with open(cfg_path, "r", encoding="utf-8") as f:
-            cfg = yaml.safe_load(f) or {}
-    except Exception as e:
-        print(f"[send-feedback] yaml error: {e}")
-        cfg = _env_mail_config()
-        if not cfg:
-            print("[send-feedback] no config.yaml and no MAIL_/EMAIL_ env vars available.")
-            return jsonify({"message": "feedback stored but mail config missing"}), 202
+    cfg = _load_mail_config()
+    if not cfg:
+        return jsonify({"message": "feedback stored but mail config missing"}), 202
 
     # compose email
     subject = f"[astro-ph feedback] from {name}"
