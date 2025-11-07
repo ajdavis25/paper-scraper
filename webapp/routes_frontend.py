@@ -182,6 +182,14 @@ SUBCATEGORY_EXPANSIONS = {
         "stat.OT",
         "stat.TH",
     ],
+    "gr-qc": ["gr-qc"],
+    "hep-ex": ["hep-ex"],
+    "hep-lat": ["hep-lat"],
+    "hep-ph": ["hep-ph"],
+    "hep-th": ["hep-th"],
+    "math-ph": ["math-ph"],
+    "nucl-ex": ["nucl-ex"],
+    "nucl-th": ["nucl-th"],
 }
 
 frontend = Blueprint("frontend", __name__)
