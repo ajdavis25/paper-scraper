@@ -368,12 +368,12 @@ def signup():
         except Exception as exc:
             db.session.rollback()
             print(f"[signup] error saving new user: {exc}")
-            flash("we couldn't finish sign-up. please try again in a moment.", "error")
+            flash("we couldn't finish sign up. please try again in a moment.", "error")
             return redirect(url_for("frontend.signup"))
 
         login_user(new_user)
         flash("signup complete — welcome aboard!")
-        return redirect(url_for("frontend.dashboard_redirect"))
+        return redirect(url_for("frontend.info_page"))
 
     return render_template("signup.html")
 
