@@ -17,7 +17,7 @@ built out of spite because stanford gatekept vox charta
 ---
 
 ### WHAT THIS DOES
-this bot automatically fetches the latest **astro-ph arXiv papers**, filters them by keywords and author preferences, and emails a **daily curated digest** to the mailing list.  
+this bot automatically fetches the latest **arXiv papers**, filters them by keywords and author preferences, and emails a **daily curated digest** to the mailing list.  
 
 it includes:
 - a default topic profile (`defaults.yaml`) for new subscribers.

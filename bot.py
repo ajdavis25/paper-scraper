@@ -1,19 +1,18 @@
 import re, os, yaml, feedparser, requests, datetime as dt
-import html
 from filters import score_paper, match_category
 from mailer import send_email
 from curator import merge_preferences
 from shared.utils import (
     wrap_inline_tex,
     render_inline_math_html,
-    prepare_summary,
+    inline_math_to_plain,
+    decode_unicode_escapes,
 )
 
-print(f"[astro-ph bot] running: {__file__} SHA={os.environ.get('GITHUB_SHA', 'local')}")
+print(f"[arxiv bot] running: {__file__} SHA={os.environ.get('GITHUB_SHA', 'local')}")
 
 # arXiv id pattern and canonical link helper
 _ARXIV_ID_RE = re.compile(r'(?:arxiv\.org/(?:abs|pdf)/)?(\d{4}\.\d{4,5})(v\d+)?', re.I)
-_TAG_RE = re.compile(r"<[^>]+>")
 
 
 def canon_abs_url(paper):
@@ -65,7 +64,7 @@ def load_config(path=None):
 
     for candidate in candidates:
         if os.path.exists(candidate):
-            print(f"[astro-ph bot] using config: {candidate}")
+            print(f"[arxiv bot] using config: {candidate}")
             with open(candidate, "r", encoding="utf-8") as f:
                 raw = f.read()
             expanded = re.sub(r"\$\{([^}]+)\}", lambda m: os.getenv(m.group(1), ""), raw)
@@ -103,9 +102,9 @@ def fetch_recent(cfg):
         "start": "0",
     }
     url = base + "?" + "&".join(f"{k}={v}" for k, v in params.items())
-    print(f"[astro-ph bot] query URL: {url}")
+    print(f"[arxiv bot] query URL: {url}")
 
-    headers = {"User-Agent": "astro-ph-digest-bot/1.0 (mailto:ajd96@proton.me)"}
+    headers = {"User-Agent": "arxiv-digest-bot/1.0 (mailto:ajd96@proton.me)"}
 
     try:
         resp = requests.get(url, headers=headers, timeout=20)
@@ -117,7 +116,7 @@ def fetch_recent(cfg):
             try:
                 content = gzip.decompress(content)
                 data = content.decode("utf-8", errors="ignore")
-                print("[astro-ph bot] decompressed gzip response")
+                print("[arxiv bot] decompressed gzip response")
             except Exception:
                 # fall back silently if it's not actually gzipped
                 data = resp.text
@@ -125,14 +124,14 @@ def fetch_recent(cfg):
             data = resp.text
 
         if "<entry>" not in data:
-            print("[astro-ph bot] warning: no <entry> tags in feed XML!")
+            print("[arxiv bot] warning: no <entry> tags in feed XML!")
             print(data[:500])
     except Exception as e:
         print(f"error: could not fetch from arXiv: {e}")
         return []
 
     feed = feedparser.parse(data)
-    print(f"[astro-ph bot] feedparser found {len(feed.entries)} entries")
+    print(f"[arxiv bot] feedparser found {len(feed.entries)} entries")
     results = []
 
     for entry in feed.entries:
@@ -145,12 +144,11 @@ def fetch_recent(cfg):
         m = _ARXIV_ID_RE.search(entry_id) or _ARXIV_ID_RE.search(getattr(entry, "link", ""))
         arxiv_id = (m.group(1) + (m.group(2) or "")) if m else ""
 
-        summary_wrapped, summary_html, summary_plain = prepare_summary(entry.summary.strip())
+        summary_text = decode_unicode_escapes(entry.summary.strip())
+        summary_text = wrap_inline_tex(summary_text)
         results.append({
             "title": entry.title.strip(),
-            "summary": summary_wrapped,
-            "summary_html": summary_html,
-            "summary_plain": summary_plain,
+            "summary": summary_text,
             "published": pub,
             "link": getattr(entry, "link", ""),
             "id": entry_id,
@@ -158,7 +156,7 @@ def fetch_recent(cfg):
             "authors": [a.name for a in getattr(entry, "authors", [])],
         })
 
-    print(f"[astro-ph bot] fetched {len(results)} papers (max {max_results})")
+    print(f"[arxiv bot] fetched {len(results)} papers (max {max_results})")
     return results
 
 
@@ -168,13 +166,13 @@ def load_db_recipients():
         from webapp import create_app
         from webapp.models import User, Subscriber
     except Exception as exc:
-        print(f"[astro-ph bot] skipping db recipients (import error: {exc})")
+        print(f"[arxiv bot] skipping db recipients (import error: {exc})")
         return []
 
     try:
         app = create_app()
     except Exception as exc:
-        print(f"[astro-ph bot] skipping db recipients (app init error: {exc})")
+        print(f"[arxiv bot] skipping db recipients (app init error: {exc})")
         return []
 
     emails = set()
@@ -187,15 +185,15 @@ def load_db_recipients():
                         if email:
                             emails.add(email.strip().lower())
                 except Exception as inner_exc:
-                    print(f"[astro-ph bot] unable to read {model.__name__}: {inner_exc}")
+                    print(f"[arxiv bot] unable to read {model.__name__}: {inner_exc}")
     except Exception as exc:
-        print(f"[astro-ph bot] skipping db recipients (db error: {exc})")
+        print(f"[arxiv bot] skipping db recipients (db error: {exc})")
         return []
 
     if emails:
-        print(f"[astro-ph bot] loaded {len(emails)} email(s) from database.")
+        print(f"[arxiv bot] loaded {len(emails)} email(s) from database.")
     else:
-        print("[astro-ph bot] no recipient emails found in database.")
+        print("[arxiv bot] no recipient emails found in database.")
     return sorted(emails)
 
 
@@ -230,8 +228,8 @@ def curate(cfg, results):
                 "arxiv_id": r.get("arxiv_id", "") or (url.split("/")[-1] if url else ""),
             })
 
-    print(f"[astro-ph bot] curated {len(curated)} papers (score ≥ {prefs.get('min_score', 1.0)})")
-    print(f"[astro-ph bot] curated {len(curated)} / {len(results)} papers (score ≥ {prefs.get('min_score', 1.0)})")
+    print(f"[arxiv bot] curated {len(curated)} papers (score ≥ {prefs.get('min_score', 1.0)})")
+    print(f"[arxiv bot] curated {len(curated)} / {len(results)} papers (score ≥ {prefs.get('min_score', 1.0)})")
     for r in results[:10]:  # show first few raw entries
         print("→", r["title"][:80])
 
@@ -311,16 +309,15 @@ def render_paper_entry_html(paper, user_email, track_base):
         parts.append("<p>" + " ".join(meta_tags) + "</p>")
     if authors_line:
         parts.append(f"<p><i>{authors_line}</i></p>")
-    summary_html = paper.get("summary_html")
+    summary_text = paper.get("summary")
     has_math = False
-    if summary_html:
+    if summary_text:
+        print("[email summary raw]", repr(summary_text))
+        summary_wrapped = wrap_inline_tex(summary_text)
+        summary_html, has_math = render_inline_math_html(summary_wrapped)
         parts.append(f"<p>{summary_html}</p>")
-        has_math = True
-    else:
-        summary_text = paper.get("summary")
-        if summary_text:
-            summary_html, has_math = render_inline_math_html(summary_text)
-            parts.append(f"<p>{summary_html}</p>")
+
+    print("[email summary raw]", repr(summary_text))
 
     parts.append(
         f"<p><a href='{like_link}'>👍 like</a> | <a href='{dislike_link}'>👎 dislike</a></p>"
@@ -361,15 +358,11 @@ def render_paper_entry_text(paper, user_email, track_base):
 
     if authors_line:
         lines.append(f"authors: {authors_line}")
-    summary_plain = paper.get("summary_plain")
-    if summary_plain:
+    summary = paper.get("summary")
+    if summary:
+        summary_wrapped = wrap_inline_tex(summary)
+        summary_plain = inline_math_to_plain(summary_wrapped)
         lines.append(summary_plain)
-    else:
-        summary = paper.get("summary")
-        if summary:
-            summary_html, _ = render_inline_math_html(summary)
-            summary_plain = html.unescape(_TAG_RE.sub("", summary_html))
-            lines.append(summary_plain)
 
     lines.append(f"👍 like: {like_link}")
     lines.append(f"👎 dislike: {dislike_link}")
@@ -398,7 +391,7 @@ def make_email_body_for_recipient(user_email, curated, track_base):
     html_body = (
         "<html><head>"
         f"{style_block}"
-        "</head><body><h2>astro-ph digest</h2><ol>"
+        "</head><body><h2>arxiv digest</h2><ol>"
         + "\n".join(html_entries)
         + "</ol></body></html>"
     )
@@ -413,7 +406,7 @@ def main():
     test_mode = os.getenv("TEST_MODE", "false").lower() == "true"
     if test_mode:
         test_addr = cfg.get("test_recipient", "ashton.davis3@my.utsa.edu")
-        print(f"[astro-ph bot] TEST MODE ENABLED — will only send to {test_addr}")
+        print(f"[arxiv bot] TEST MODE ENABLED — will only send to {test_addr}")
         cfg["output"]["email"]["to_addrs"] = [test_addr]
     else:
         email_cfg = cfg.setdefault("output", {}).setdefault("email", {})
@@ -429,11 +422,11 @@ def main():
     track_base = (
         cfg.get("output", {})
            .get("email", {})
-           .get("track_base", "https://astro-digest.vercel.app")
+           .get("track_base", "https://paperscraper-one.vercel.app/")
     )
 
     cfg["preferences"] = merge_preferences(cfg["preferences"])
-    print("[astro-ph bot] merged keywords:", cfg["preferences"])
+    print("[arxiv bot] merged keywords:", cfg["preferences"])
 
     papers = fetch_recent(cfg)
     curated = curate(cfg, papers)
@@ -452,10 +445,10 @@ def main():
     base_thr = cfg["preferences"].get("min_score", 1.0)
 
     selected, eff_thr = select_top(curated, min_keep=min_keep, max_keep=max_keep, base_min_score=base_thr)
-    print(f"[astro-ph bot] selected {len(selected)} (effective threshold={eff_thr}) out of {len(curated)} curated")
+    print(f"[arxiv bot] selected {len(selected)} (effective threshold={eff_thr}) out of {len(curated)} curated")
 
     recipients = cfg["output"]["email"]["to_addrs"]
-    print("[astro-ph bot] sending digest to:", recipients)
+    print("[arxiv bot] sending digest to:", recipients)
 
     n = len(selected)
     subject = f'{cfg["output"]["email"]["subject_prefix"]} {dt.date.today()} — {n} paper{"s" if n != 1 else ""}'

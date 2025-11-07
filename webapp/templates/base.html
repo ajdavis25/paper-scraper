@@ -7,7 +7,7 @@
       name="description"
       content="daily digest — curated arXiv papers delivered fresh."
     />
-    <title>{% block title %}astro-ph digest{% endblock %}</title>
+    <title>{% block title %}arxiv digest{% endblock %}</title>
     <link
       rel="stylesheet"
       href="{{ url_for('static', filename='css/style.css') }}"
@@ -40,7 +40,7 @@
     data-is-admin="{{ 'true' if current_user.is_authenticated and current_user.is_admin else 'false' }}"
   >
     <header>
-      <h1><a href="/">astro-ph digest</a></h1>
+      <h1><a href="/">arxiv digest</a></h1>
       <nav>
         {% if not current_user.is_authenticated or not nav_user_is_subscribed %}
         <a href="/subscribe">subscribe</a>
@@ -86,7 +86,7 @@
           console.log("toast:", type || "info", message);
           return;
         }
-        var bgOverride = (type === "success") ? "#1e7e34" : "#a70000";
+        var bgOverride = type === "success" ? "#1e7e34" : "#a70000";
         Toastify({
           text: message,
           duration: 4200,

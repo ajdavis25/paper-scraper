@@ -725,7 +725,7 @@ def recommendations():
     """
     from sqlalchemy.exc import SQLAlchemyError
     from urllib.parse import quote_plus
-    from shared.utils import fetch_arxiv_feed, render_inline_math_html
+    from shared.utils import fetch_arxiv_feed
 
     # load preferences
     try:
@@ -864,11 +864,9 @@ def recommendations():
     scored = scored[:10]
 
     for rec in scored:
-        summary_html = rec.get("summary_html")
-        if not summary_html:
-            summary_text = rec.get("summary", "") or ""
-            summary_html, _ = render_inline_math_html(summary_text)
-        rec["summary_html"] = Markup(summary_html)
+        summary_text = rec.get("summary", "") or ""
+        escaped = Markup.escape(summary_text)
+        rec["summary_html"] = escaped.replace("\n", Markup("<br>"))
 
     display_labels = selected_categories or categories
     msg = (

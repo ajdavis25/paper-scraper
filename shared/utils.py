@@ -1,6 +1,6 @@
 # shared/utils.py
 """
-general-purpose helpers for astro-ph digest.
+general-purpose helpers for arxiv digest.
 """
 from __future__ import annotations
 
@@ -61,10 +61,18 @@ _ARG_FIX_RE = re.compile(
     r"(?!\s*\{)\s*"
     r"(?P<arg>(?:\\[A-Za-z]+(?:\{[^}]+\})?)|[A-Za-z0-9])"
 )
-_INLINE_MATH_RE = re.compile(r"(?<!\\)\$(.+?)(?<!\\)\$")
+_INLINE_MATH_RE = re.compile(r"(?<!\\)\$(.+?)(?<!\\)\$", re.DOTALL)
 _PAREN_INLINE_MATH_RE = re.compile(r"\\\((.+?)\\\)")
+_SUBSUP_ARGUMENT = (
+    r"(?:"
+    r"\{[^}]+\}"
+    r"|\\[A-Za-z]+(?:\{[^}]+\})?"
+    r"|[A-Za-z0-9]+"
+    r"|@@MATH\d+@@"
+    r")"
+)
 _SUBSUP_TOKEN_PATTERN = re.compile(
-    r"(?<![\w$])([A-Za-z0-9]+(?:_(?:\{[^}]+\}|[A-Za-z0-9]+)|\^(?:\{[^}]+\}|[A-Za-z0-9]+))+)"
+    rf"(?<!\w)([A-Za-z0-9]+(?:_(?:{_SUBSUP_ARGUMENT})|\^(?:{_SUBSUP_ARGUMENT}))+)"
 )
 _MATH_SEGMENT_RE = re.compile(
     r"(?<!\\)\$(.+?)(?<!\\)\$|\\\((.+?)\\\)|\\\[(.+?)\\\]", re.DOTALL
@@ -165,6 +173,17 @@ def wrap_inline_tex(text: str) -> str:
             idx += 1
         return ("".join(buf), idx)
 
+    def _is_subsup_argument(src: str, idx: int) -> bool:
+        """return True if the command at idx is part of a _ or ^ expression."""
+        j = idx - 1
+        while j >= 0 and src[j].isspace():
+            j -= 1
+        while j >= 0 and src[j] == "{":
+            j -= 1
+            while j >= 0 and src[j].isspace():
+                j -= 1
+        return j >= 0 and src[j] in {"_", "^"}
+
     while i < length:
         ch = text[i]
         if text.startswith("\\(", i):
@@ -188,6 +207,7 @@ def wrap_inline_tex(text: str) -> str:
             i += 2
             continue
         if ch in "{}" and not in_math:
+            out.append(ch)
             i += 1
             continue
         if ch == "$":
@@ -243,7 +263,10 @@ def wrap_inline_tex(text: str) -> str:
                     idx += 1
 
             expr = "".join(expr_parts)
-            out.append(f"${expr}$")
+            if _is_subsup_argument(text, i):
+                out.append(expr)
+            else:
+                out.append(f"${expr}$")
             i = idx
             continue
 
@@ -264,26 +287,46 @@ def wrap_inline_tex(text: str) -> str:
 
     protected = _MATH_SEGMENT_RE.sub(_protect, wrapped)
     protected = _SUBSUP_TOKEN_PATTERN.sub(
-        lambda m: f"${m.group(1)}$", protected
+        lambda m: "$" + m.group(1) + "$", protected
     )
     for idx, original in enumerate(placeholders):
         protected = protected.replace(f"@@MATH{idx}@@", original, 1)
 
-    return protected.replace("$ $", "$")
+    return protected
 
 
 def _to_superscript(text: str) -> str:
     clean = (text or "").strip()
     if not clean:
         return ""
-    return f"^{{{clean}}}"
+    out = []
+    missing = False
+    for ch in clean:
+        repl = _SUPERSCRIPT_MAP.get(ch)
+        if repl is None:
+            missing = True
+            break
+        out.append(repl)
+    if missing:
+        return f"^{clean}"
+    return "".join(out)
 
 
 def _to_subscript(text: str) -> str:
     clean = (text or "").strip()
     if not clean:
         return ""
-    return f"_{{{clean}}}"
+    out = []
+    missing = False
+    for ch in clean:
+        repl = _SUBSCRIPT_MAP.get(ch)
+        if repl is None:
+            missing = True
+            break
+        out.append(repl)
+    if missing:
+        return f"_{clean}"
+    return "".join(out)
 
 
 EXTRA_LATEX_SYMBOLS = {
@@ -300,8 +343,6 @@ EXTRA_LATEX_SYMBOLS = {
     "\\gtrsim": ">=",
     "\\times": "x",
     "\\cdot": "*",
-    "\\Delta": "Delta",
-    "\\delta": "delta",
     "\\sim": "~",
     "\\,": " ",
     "\\;": " ",
@@ -574,7 +615,7 @@ def latex_to_plain(expr: str) -> str:
                 while j < length and (expr[j].isalnum() or expr[j] in {"'", "\\"}):
                     token.append(expr[j])
                     j += 1
-                result.append(_to_superscript("".join(token)))
+                result.append(_to_superscript(latex_to_plain("".join(token))))
                 i = j
             continue
         elif ch == "_":
@@ -588,7 +629,7 @@ def latex_to_plain(expr: str) -> str:
                 while j < length and (expr[j].isalnum() or expr[j] in {"'", "\\"}):
                     token.append(expr[j])
                     j += 1
-                result.append(_to_subscript("".join(token)))
+                result.append(_to_subscript(latex_to_plain("".join(token))))
                 i = j
             continue
         elif ch in "{}":
@@ -625,17 +666,6 @@ def render_inline_math_html(text: str) -> Tuple[str, bool]:
     return processed, math_found
 
 
-def prepare_summary(text: str) -> tuple[str, str, str]:
-    """
-    normalize a raw summary to (wrapped_tex, html_with_spans, plain_text).
-    """
-    decoded = decode_unicode_escapes(text or "")
-    wrapped = wrap_inline_tex(decoded)
-    html_summary, _ = render_inline_math_html(wrapped)
-    plain_summary = strip_html_tags(html_summary)
-    return wrapped, html_summary, plain_summary
-
-
 def inline_math_to_plain(text: str) -> str:
     """
     replace inline math segments with plain-text approximations.
@@ -649,7 +679,10 @@ def inline_math_to_plain(text: str) -> str:
         plain = latex_to_plain(expr.strip())
         return plain if plain else match.group(0)
 
-    return _MATH_SEGMENT_RE.sub(repl, text)
+    plain = _MATH_SEGMENT_RE.sub(repl, text)
+    plain = re.sub(r"[{}]", "", plain)
+    plain = re.sub(r"\s+", " ", plain).strip()
+    return plain
 
 
 def fetch_arxiv_feed(url):
@@ -689,13 +722,11 @@ def fetch_arxiv_feed(url):
             )
 
             summary_text = summary.text.strip() if summary is not None else ""
-            summary_wrapped, summary_html, summary_plain = prepare_summary(summary_text)
+            summary_text = decode_unicode_escapes(summary_text)
             entries.append(
                 {
                     "title": title.text.strip() if title is not None else "(no title)",
-                    "summary": summary_wrapped,
-                    "summary_html": summary_html,
-                    "summary_plain": summary_plain,
+                    "summary": wrap_inline_tex(summary_text),
                     "link": link.text.strip() if link is not None else "#",
                     "published": published.text.strip() if published is not None else "",
                     "authors": author_names,

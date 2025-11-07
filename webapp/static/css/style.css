@@ -457,6 +457,13 @@ small {
   line-height: 1.4;
 }
 
+mjx-container[jax="CHTML"] mjx-mi,
+mjx-container[jax="CHTML"] mjx-mo,
+mjx-container[jax="CHTML"] mjx-mn {
+    font-family: "Latin Modern Math", "STIX Two Math", "Times New Roman", serif !important;
+    font-weight: 400 !important;
+}
+
 /* consistent button styling */
 button, .btn {
   font-family: inherit;
