@@ -86,6 +86,7 @@
           console.log("toast:", type || "info", message);
           return;
         }
+        var bgOverride = (type === "success") ? "#1e7e34" : "#a70000";
         Toastify({
           text: message,
           duration: 4200,
@@ -94,6 +95,10 @@
           stopOnFocus: true,
           close: true,
           className: "toastify-" + (type || "info"),
+          style: Object.assign(
+            { opacity: 1.0 },
+            { background: bgOverride, color: "#fff" }
+          ),
         }).showToast();
       };
 

@@ -331,13 +331,9 @@ section.unsubscribe-section {
   color: #fff !important;
 }
 
-.toastify-error {
-  background: #b22222 !important;
-  color: #fff !important;
-}
-
+.toastify-error,
 .toastify-info {
-  background: #1d4e89 !important;
+  background: #a70000 !important;
   color: #fff !important;
 }
 
