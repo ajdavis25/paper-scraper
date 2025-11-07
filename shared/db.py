@@ -30,6 +30,15 @@ class ConfiguredSQLAlchemy(SQLAlchemy):
         resolved = resolve_database_uri(app.config.get("SQLALCHEMY_DATABASE_URI"))
         app.config["SQLALCHEMY_DATABASE_URI"] = resolved
         app.config.setdefault("SQLALCHEMY_TRACK_MODIFICATIONS", False)
+
+        # ensure long-lived (serverless) deployments gracefully recover when Neon/PG
+        # closes idle connections. pre_ping tests connections before use; recycle
+        # forces a reconnect periodically; timeout keeps failures fast.
+        engine_opts = app.config.setdefault("SQLALCHEMY_ENGINE_OPTIONS", {})
+        engine_opts.setdefault("pool_pre_ping", True)
+        engine_opts.setdefault("pool_recycle", 300)
+        engine_opts.setdefault("pool_timeout", 10)
+
         super().init_app(app)
 
 
