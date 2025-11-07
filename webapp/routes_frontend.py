@@ -309,7 +309,7 @@ def preferences_page():
 @frontend.route("/dashboard")
 @login_required
 def dashboard_redirect():
-    """redirect /dashboard → /dashboard/<email> if logged in."""
+    """redirect /dashboard -> /dashboard/<email> if logged in."""
     return redirect(url_for("frontend.dashboard", email=current_user.email))
 
 
@@ -832,17 +832,17 @@ def info_page():
     sample_digest = [
         {
             "title": "probing dark matter substructure with lensed quasars",
-            "category": "astro-ph.CO", "score": 3,
+            "category": "astro-ph.CO", "score": 3.0,
             "summary": "concise analysis of strong-lensing flux anomalies as subhalo probes.",
         },
         {
             "title": "machine-learning forecasts for gravitational-wave events",
-            "category": "astro-ph.IM", "score": 4,
+            "category": "astro-ph.IM", "score": 4.0,
             "summary": "overview of a random-forest pipeline that predicts merger rates from detector telemetry.",
         },
         {
             "title": "turbulence-regulated star formation in molecular clouds",
-            "category": "astro-ph.GA", "score": 2,
+            "category": "astro-ph.GA", "score": 2.0,
             "summary": "simulation-driven insight into how feedback preserves Larson-like scaling.",
         },
     ]
