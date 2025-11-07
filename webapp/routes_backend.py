@@ -20,6 +20,7 @@ from shared.gmail_push import (
     list_history,
     GmailPushError,
 )
+from webapp.account_utils import ensure_user_stub
 from webapp.models import PreferenceConfig, GmailWatchState, Subscriber
 
 backend = Blueprint("backend", __name__)
@@ -108,6 +109,7 @@ def _subscribe_email(address: str) -> bool:
         return False
     sub = Subscriber(email=normalized)
     db.session.add(sub)
+    ensure_user_stub(normalized, commit=False)
     db.session.commit()
     print(f"[gmail-hook] subscribed {normalized}")
     return True

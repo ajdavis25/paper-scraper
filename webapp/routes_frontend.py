@@ -7,6 +7,7 @@ from sqlalchemy import func
 from markupsafe import Markup
 
 from shared.db import db
+from webapp.account_utils import ensure_user_stub
 from webapp.models import User, Paper, UserPreference, Subscriber, Feedback, PreferenceConfig
 from shared.utils import get_user_by_email, render_inline_math_html
 from shared.mail import send_reset_email, get_serializer, send_email
@@ -205,7 +206,7 @@ def login():
                 return redirect(url_for("frontend.login"))
 
             user = get_user_by_email(email)
-            if user and check_password_hash(user.password_hash, password):
+            if user and user.password_hash and check_password_hash(user.password_hash, password):
                 login_user(user)
                 # ensure logged-in users are in subscriber list
                 normalized_email = email.strip().lower()
@@ -217,9 +218,26 @@ def login():
                 session["is_admin"] = bool(user.is_admin)
                 flash("logged in successfully.", "success")
                 return redirect(url_for("frontend.index"))
-            else:
-                flash("invalid email or password.", "error")
-                return redirect(url_for("frontend.login"))
+
+            if user and not user.password_hash:
+                flash(
+                    "looks like you subscribed via email earlier. set a password to finish account setup.",
+                    "info",
+                )
+                return redirect(url_for("frontend.signup"))
+
+            if not user:
+                subscriber = Subscriber.query.filter(func.lower(Subscriber.email) == email).first()
+                if subscriber:
+                    ensure_user_stub(email)
+                    flash(
+                        "looks like you subscribed via email earlier. set a password to finish account setup.",
+                        "info",
+                    )
+                    return redirect(url_for("frontend.signup"))
+
+            flash("invalid email or password.", "error")
+            return redirect(url_for("frontend.login"))
 
         return render_template("login.html")
     except Exception as e:
@@ -247,20 +265,15 @@ def subscribe():
             return jsonify({"status": "error", "message": "please enter a valid email."}), 400
 
         try:
-            user_exists = User.query.filter(
-                db.func.lower(User.email) == email
-            ).first()
-            if user_exists:
-                return jsonify({"status": "info", "message": "already subscribed!"})
-
             existing = Subscriber.query.filter(
-                db.func.lower(Subscriber.email) == email
+                func.lower(Subscriber.email) == email
             ).first()
             if existing:
                 return jsonify({"status": "info", "message": "already subscribed!"})
 
             new_sub = Subscriber(email=email)
             db.session.add(new_sub)
+            ensure_user_stub(email, commit=False)
             db.session.commit()
             return jsonify({"status": "success", "message": "subscribed successfully!"})
         except Exception as e:
@@ -348,10 +361,24 @@ def signup():
         email = request.form["email"].strip().lower()
         password = request.form["password"]
 
-        # check if user already exists
-        if User.query.filter_by(email=email).first():
-            flash("user already exists. try logging in instead.")
-            return redirect(url_for("frontend.login"))
+        existing_user = User.query.filter(func.lower(User.email) == email).first()
+        if existing_user:
+            if existing_user.password_hash:
+                flash("user already exists. try logging in instead.", "error")
+                return redirect(url_for("frontend.login"))
+
+            try:
+                existing_user.password_hash = generate_password_hash(password)
+                db.session.commit()
+            except Exception as exc:
+                db.session.rollback()
+                print(f"[signup] error claiming user: {exc}")
+                flash("we couldn't finish sign-up. please try again in a moment.", "error")
+                return redirect(url_for("frontend.signup"))
+
+            login_user(existing_user)
+            flash("account claimed! welcome aboard!", "success")
+            return redirect(url_for("frontend.dashboard_redirect"))
 
         try:
             # hash and store the password
@@ -372,8 +399,8 @@ def signup():
             return redirect(url_for("frontend.signup"))
 
         login_user(new_user)
-        flash("signup complete — welcome aboard!")
-        return redirect(url_for("frontend.info_page"))
+        flash("signup complete — welcome aboard!", "success")
+        return redirect(url_for("frontend.dashboard_redirect"))
 
     return render_template("signup.html")
 

@@ -57,14 +57,16 @@
     </header>
 
     <main>
-      {% block content %}{% endblock %} {% with messages =
-      get_flashed_messages() %} {% if messages %}
-      <ul class="flash-messages">
-        {% for message in messages %}
-        <li>{{ message }}</li>
-        {% endfor %}
-      </ul>
-      {% endif %} {% endwith %}
+      {% block content %}{% endblock %}
+      {% with messages = get_flashed_messages(with_categories=True) %}
+        {% if messages %}
+          <div class="flash-messages">
+            {% for category, message in messages %}
+              <div class="flash {{ category }}">{{ message }}</div>
+            {% endfor %}
+          </div>
+        {% endif %}
+      {% endwith %}
     </main>
 
     <footer>
@@ -113,5 +115,21 @@
       async
       src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
     ></script>
+    <script>
+      (function dismissFlashes() {
+        var flashes = document.querySelectorAll(".flash");
+        if (!flashes.length) {
+          return;
+        }
+        setTimeout(function () {
+          flashes.forEach(function (node) {
+            node.classList.add("fade-out");
+            setTimeout(function () {
+              node.remove();
+            }, 600);
+          });
+        }, 3500);
+      })();
+    </script>
   </body>
 </html>

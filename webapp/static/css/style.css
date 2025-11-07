@@ -326,10 +326,26 @@ section.unsubscribe-section {
   border-radius: 6px;
 }
 
-.flash {
+.flash-messages {
   margin-top: 1em;
-  padding: 0.6em;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7em;
+  align-items: center;
+}
+
+.flash {
+  padding: 0.6em 0.9em;
   border-radius: 6px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  width: min(540px, 100%);
+  display: block;
+  opacity: 1;
+  transition: opacity 0.4s ease;
+}
+
+.flash.fade-out {
+  opacity: 0;
 }
 
 .flash.success {

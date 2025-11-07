@@ -145,6 +145,7 @@ def add_to_database(new_email):
     try:
         from webapp import create_app
         from webapp.models import Subscriber
+        from webapp.account_utils import ensure_user_stub
         from shared.db import db
     except Exception as exc:
         print(f"[subscribe] failed to import app/db modules: {exc}")
@@ -174,6 +175,7 @@ def add_to_database(new_email):
 
             sub = Subscriber(email=lower_email)
             db.session.add(sub)
+            ensure_user_stub(lower_email, commit=False)
             db.session.commit()
             print(f"added {new_email} to subscriber table.")
             return True

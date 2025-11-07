@@ -27,6 +27,18 @@ def create_app():
     app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev-secret-key")
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
+    # safari/webview logins can silently drop non-secure cookies; default to secure
+    # None-samesite cookies on vercel/prod so session + remember cookies stick.
+    running_managed = bool(os.getenv("VERCEL") or os.getenv("FORCE_SECURE_COOKIES"))
+    if running_managed:
+        app.config.setdefault("SESSION_COOKIE_SECURE", True)
+        app.config.setdefault("SESSION_COOKIE_SAMESITE", "None")
+        app.config.setdefault("REMEMBER_COOKIE_SECURE", True)
+        app.config.setdefault("REMEMBER_COOKIE_SAMESITE", "None")
+    else:
+        app.config.setdefault("SESSION_COOKIE_SAMESITE", "Lax")
+        app.config.setdefault("REMEMBER_COOKIE_SAMESITE", "Lax")
+
     if os.getenv("DATABASE_URL"):
         app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv("DATABASE_URL")
     else:
