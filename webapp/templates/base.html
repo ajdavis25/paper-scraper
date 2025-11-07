@@ -32,6 +32,9 @@
       href="/static/img/apple-touch-icon.png"
     />
     <link rel="manifest" href="/static/img/site.webmanifest" />
+    <script id="flash-data" type="application/json">
+      {{ get_flashed_messages(with_categories=True) | tojson | safe }}
+    </script>
   </head>
   <body
     data-is-admin="{{ 'true' if current_user.is_authenticated and current_user.is_admin else 'false' }}"
@@ -95,17 +98,21 @@
       };
 
       (function showToasts() {
-        if (!window.Toastify) {
-          return;
-        }
-        var body = document.body;
-        var flashData = (body && body.getAttribute("data-flash")) || "[]";
+        var dataNode = document.getElementById("flash-data");
+        var raw = dataNode ? dataNode.textContent || "[]" : "[]";
         var msgs = [];
         try {
-          msgs = JSON.parse(flashData) || [];
+          msgs = JSON.parse(raw) || [];
         } catch (err) {
-          console.warn("[astro] failed to parse flash messages", err);
+          console.warn("[astro] failed to parse flash payload", err);
           msgs = [];
+        }
+        if (!msgs.length) {
+          return;
+        }
+        if (!window.Toastify) {
+          console.warn("[astro] Toastify not ready; messages:", msgs);
+          return;
         }
         msgs.forEach(function (entry) {
           var category = entry[0] || "info";
@@ -115,6 +122,9 @@
           }
           window.toastifyNotify(message, category);
         });
+        if (dataNode) {
+          dataNode.parentNode.removeChild(dataNode);
+        }
       })();
     </script>
     <script>
