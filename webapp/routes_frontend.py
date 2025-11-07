@@ -399,7 +399,7 @@ def signup():
             return redirect(url_for("frontend.signup"))
 
         login_user(new_user)
-        flash("signup complete — welcome aboard!", "success")
+        flash("sign up complete — welcome aboard!", "success")
         return redirect(url_for("frontend.dashboard_redirect"))
 
     return render_template("signup.html")
