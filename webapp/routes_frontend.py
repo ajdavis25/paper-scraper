@@ -730,12 +730,17 @@ def recommendations():
     # load preferences
     try:
         config = PreferenceConfig.get_or_create_for_user(current_user)
-        prefs = config.as_dict() if config else {"keywords": [], "categories": ["astro-ph"], "min_score": 1.0}
+        prefs = (
+            config.as_dict()
+            if config
+            else {"keywords": [], "excluded_keywords": [], "categories": ["astro-ph"], "min_score": 1.0}
+        )
     except SQLAlchemyError as e:
         print(f"[recommendations] db error loading prefs: {e}")
-        prefs = {"keywords": [], "categories": ["astro-ph"], "min_score": 1.0}
+        prefs = {"keywords": [], "excluded_keywords": [], "categories": ["astro-ph"], "min_score": 1.0}
 
     keywords = prefs.get("keywords") or []
+    excluded_keywords = prefs.get("excluded_keywords") or []
     raw_categories = prefs.get("categories") or ["astro-ph"]
     selected_categories = [c.strip() for c in raw_categories if c and c.strip()]
     if not selected_categories:
@@ -770,9 +775,15 @@ def recommendations():
         )
 
     # build encoded keywords for search
-    encoded_terms = [f'all:"{quote_plus(k.strip())}"' for k in keywords if k.strip()]
+    keyword_terms = [k.strip() for k in keywords if k and k.strip()]
+    encoded_terms = [f'all:"{quote_plus(k)}"' for k in keyword_terms]
     if not encoded_terms:
         return render_template("recommendations.html", recs=[], message="no valid keywords provided.")
+
+    keyword_terms_lower = [k.lower() for k in keyword_terms]
+    excluded_terms_lower = [
+        term.strip().lower() for term in excluded_keywords if term and term.strip()
+    ]
 
     def _display_category(preference_cat, paper):
         """
@@ -831,18 +842,19 @@ def recommendations():
             dedup[link] = r
 
     # scoring
-    def relevance_score(paper):
-        text = f"{paper.get('title','')} {paper.get('summary','')}".lower()
+    def relevance_score(text):
         score = 0
-        for kw in keywords:
-            kw_clean = kw.strip().lower()
-            if kw_clean and kw_clean in text:
+        for kw in keyword_terms_lower:
+            if kw and kw in text:
                 score += 1
         return score
 
     scored = []
     for r in dedup.values():
-        s = relevance_score(r)
+        text = f"{r.get('title','')} {r.get('summary','')}".lower()
+        if excluded_terms_lower and any(term in text for term in excluded_terms_lower):
+            continue
+        s = relevance_score(text)
         if s >= min_score:
             r["score"] = s
             scored.append(r)

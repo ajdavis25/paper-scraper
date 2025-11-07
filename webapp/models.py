@@ -102,6 +102,7 @@ class PreferenceConfig(db.Model):
         unique=True,
     )
     keywords = db.Column(db.JSON, default=list)
+    excluded_keywords = db.Column(db.JSON, default=list)
     authors = db.Column(db.JSON, default=list)
     categories = db.Column(db.JSON, default=list)
     min_score = db.Column(db.Float, default=1.0)
@@ -118,6 +119,7 @@ class PreferenceConfig(db.Model):
     def as_dict(self):
         return {
             "keywords": list(self.keywords or []),
+            "excluded_keywords": list(self.excluded_keywords or []),
             "authors": list(self.authors or []),
             "categories": list(self.categories or ["astro-ph"]),
             "min_score": self.min_score if self.min_score is not None else 1.0,
@@ -140,6 +142,7 @@ class PreferenceConfig(db.Model):
         config = cls(
             user_id=user.id,
             keywords=list((defaults.keywords if defaults else []) or []),
+            excluded_keywords=list((defaults.excluded_keywords if defaults else []) or []),
             authors=list((defaults.authors if defaults else []) or []),
             categories=list((defaults.categories if defaults else []) or ["astro-ph"]),
             min_score=defaults.min_score if defaults and defaults.min_score is not None else 1.0,
@@ -216,6 +219,13 @@ def ensure_preference_config_schema():
                 )
             except Exception as exc:
                 print(f"[migrate] warning creating preference_config_user_id_idx: {exc}")
+
+    if "excluded_keywords" not in existing_columns:
+        with engine.begin() as conn:
+            try:
+                conn.execute(text("ALTER TABLE preference_config ADD COLUMN excluded_keywords JSON"))
+            except Exception as exc:
+                print(f"[migrate] warning adding excluded_keywords column: {exc}")
 
     # ensure a default/global config row exists for cloning new users
     if not PreferenceConfig.query.filter_by(user_id=None).first():

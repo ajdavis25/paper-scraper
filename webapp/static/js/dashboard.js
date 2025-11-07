@@ -78,6 +78,7 @@ document.addEventListener("DOMContentLoaded", () => {
         .then(parsePrefsResponse)
         .then(prefs => {
           document.querySelector("#keywords").value = (prefs.keywords || []).join(", ");
+          document.querySelector("#excluded_keywords").value = (prefs.excluded_keywords || []).join(", ");
           document.querySelector("#authors").value = (prefs.authors || []).join(", ");
           document.querySelector("#min_score").value = prefs.min_score || 1.0;
 
@@ -90,6 +91,7 @@ document.addEventListener("DOMContentLoaded", () => {
           }
 
           const kw = prefs.keywords?.join(", ") || "(none)";
+          const excluded = prefs.excluded_keywords?.join(", ") || "(none)";
           const au = prefs.authors?.join(", ") || "(none)";
           const sc = prefs.min_score || 1.0;
           const cat = prefs.categories?.join(", ") || "(astro-ph)";
@@ -98,6 +100,7 @@ document.addEventListener("DOMContentLoaded", () => {
             <div class="prefs-summary">
               <strong>keywords:</strong> ${kw}<br>
               <strong>authors:</strong> ${au}<br>
+              <strong>excluded keywords:</strong> ${excluded}<br>
               <strong>categories:</strong> ${cat}<br>
               <strong>min score:</strong> ${sc}
             </div>
@@ -120,6 +123,8 @@ document.addEventListener("DOMContentLoaded", () => {
         if (prefs) {
           if (prefs.keywords)
             document.getElementById("keywords").value = prefs.keywords.join(", ");
+          if (prefs.excluded_keywords)
+            document.getElementById("excluded_keywords").value = prefs.excluded_keywords.join(", ");
           if (prefs.authors)
             document.getElementById("authors").value = prefs.authors.join(", ");
           if (prefs.min_score)
@@ -151,6 +156,11 @@ document.addEventListener("DOMContentLoaded", () => {
       const data = {
         keywords: document
           .getElementById("keywords")
+          .value.split(",")
+          .map((x) => x.trim())
+          .filter(Boolean),
+        excluded_keywords: document
+          .getElementById("excluded_keywords")
           .value.split(",")
           .map((x) => x.trim())
           .filter(Boolean),

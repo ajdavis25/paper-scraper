@@ -46,6 +46,7 @@ def api_preferences():
         config = PreferenceConfig.get_or_create_for_user(current_user, commit=False)
 
         config.keywords = data.get("keywords") or []
+        config.excluded_keywords = data.get("excluded_keywords") or []
         config.authors = data.get("authors") or []
         config.categories = data.get("categories") or ["astro-ph"]
         config.min_score = data.get("min_score", 1.0) or 1.0
