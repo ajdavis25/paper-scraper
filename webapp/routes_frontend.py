@@ -427,7 +427,45 @@ def reset_password(token):
 # ----------------------------------------------------------
 # send feedback (contact form)
 # ----------------------------------------------------------
-@frontend.route("/send-feedback", methods=["GET", "POST"])
+def _env_mail_config():
+    """
+    fallback mail configuration that mirrors config.yaml structure using environment variables.
+    expects EMAIL_FROM (and EMAIL_PASS env) already used elsewhere.
+    """
+    from_addr = (os.getenv("EMAIL_FROM") or "").strip()
+    if not from_addr:
+        return {}
+
+    def _parse_recipients(raw: str | None):
+        if not raw:
+            return []
+        return [addr.strip() for addr in raw.split(",") if addr.strip()]
+
+    try:
+        port = int(os.getenv("SMTP_PORT", "587"))
+    except ValueError:
+        port = 587
+
+    recipients = _parse_recipients(os.getenv("FEEDBACK_EMAIL"))
+    if not recipients:
+        recipients = [from_addr]
+
+    return {
+        "output": {
+            "email": {
+                "from_addr": from_addr,
+                "to_addrs": recipients,
+                "subject_prefix": os.getenv("EMAIL_SUBJECT_PREFIX", "[astro-ph feedback]"),
+                "smtp_host": os.getenv("SMTP_HOST", "smtp.gmail.com"),
+                "smtp_port": port,
+                "use_starttls": os.getenv("SMTP_USE_STARTTLS", "true").lower() not in {"false", "0", "no"},
+                "username": from_addr,
+                "password_env": os.getenv("PASSWORD_ENV", "EMAIL_PASS"),
+            }
+        }
+    }
+
+
 def user_feedback():
     """receives user feedback, stores it in the database, and emails it to the bot."""
     import yaml
@@ -463,7 +501,10 @@ def user_feedback():
             cfg = yaml.safe_load(f) or {}
     except Exception as e:
         print(f"[send-feedback] yaml error: {e}")
-        cfg = {}
+        cfg = _env_mail_config()
+        if not cfg:
+            print("[send-feedback] no config.yaml and no MAIL_/EMAIL_ env vars available.")
+            return jsonify({"message": "feedback stored but mail config missing"}), 202
 
     # compose email
     subject = f"[astro-ph feedback] from {name}"
