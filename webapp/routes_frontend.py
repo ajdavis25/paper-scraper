@@ -371,8 +371,9 @@ def signup():
             flash("we couldn't finish sign-up. please try again in a moment.", "error")
             return redirect(url_for("frontend.signup"))
 
-        flash("signup successful! you can now log in.")
-        return redirect(url_for("frontend.login"))
+        login_user(new_user)
+        flash("signup complete — welcome aboard!")
+        return redirect(url_for("frontend.dashboard_redirect"))
 
     return render_template("signup.html")
 
