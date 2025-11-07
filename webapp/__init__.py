@@ -71,8 +71,6 @@ def create_app():
             traceback.print_exc()
             raise
 
-    _app_instance = app
-    return app
     @app.context_processor
     def inject_subscription_state():
         subscribed = False
@@ -84,3 +82,6 @@ def create_app():
                     is not None
                 )
         return dict(nav_user_is_subscribed=subscribed)
+
+    _app_instance = app
+    return app
