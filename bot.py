@@ -1,4 +1,5 @@
 import re, os, yaml, feedparser, requests, datetime as dt
+import copy
 from filters import score_paper, match_category
 from mailer import send_email
 from curator import merge_preferences
@@ -38,6 +39,54 @@ def canon_abs_url(paper):
         return f"https://arxiv.org/abs/{paper['arxiv_id']}"
     return ""
 
+def _dedupe_preserve_order(items):
+    seen = set()
+    result = []
+    for item in items or []:
+        if item is None:
+            continue
+        key = item.lower() if isinstance(item, str) else item
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(item)
+    return result
+
+def _clone_preferences(prefs):
+    cloned = {}
+    for key, value in (prefs or {}).items():
+        if isinstance(value, list):
+            cloned[key] = list(value)
+        elif isinstance(value, dict):
+            cloned[key] = copy.deepcopy(value)
+        else:
+            cloned[key] = value
+    return cloned
+
+def _combine_preferences(base, overrides):
+    merged = {}
+    base = base or {}
+    overrides = overrides or {}
+    for key in set(base) | set(overrides):
+        base_val = base.get(key)
+        override_val = overrides.get(key)
+        if isinstance(override_val, list):
+            if override_val:
+                merged[key] = _dedupe_preserve_order(list(override_val))
+            elif isinstance(base_val, list):
+                merged[key] = _dedupe_preserve_order(list(base_val))
+            else:
+                merged[key] = []
+        elif override_val not in (None, ""):
+            merged[key] = override_val
+        elif isinstance(base_val, list):
+            merged[key] = _dedupe_preserve_order(list(base_val))
+        else:
+            merged[key] = base_val
+    return merged
+
+def _normalize_email(email: str) -> str:
+    return (email or "").strip().lower()
 
 def load_config(path=None):
     """
@@ -146,6 +195,16 @@ def fetch_recent(cfg):
 
         summary_text = decode_unicode_escapes(entry.summary.strip())
         summary_text = wrap_inline_tex(summary_text)
+        categories = []
+        primary_category = ""
+        for tag in getattr(entry, "tags", []) or []:
+            term = getattr(tag, "term", "") or (tag.get("term") if isinstance(tag, dict) else "")
+            if term:
+                categories.append(term)
+        if getattr(entry, "arxiv_primary_category", None):
+            primary_category = getattr(entry.arxiv_primary_category, "term", "") or ""
+        if not primary_category and categories:
+            primary_category = categories[0]
         results.append({
             "title": entry.title.strip(),
             "summary": summary_text,
@@ -154,84 +213,109 @@ def fetch_recent(cfg):
             "id": entry_id,
             "arxiv_id": arxiv_id,
             "authors": [a.name for a in getattr(entry, "authors", [])],
+            "categories": categories,
+            "primary_category": primary_category,
         })
 
     print(f"[arxiv bot] fetched {len(results)} papers (max {max_results})")
     return results
 
 
-def load_db_recipients():
-    """fetch recipient emails from the database, if available."""
+def load_db_recipients(fallback_prefs):
+    """fetch recipient preference profiles from the database, if available."""
     try:
         from webapp import create_app
-        from webapp.models import User, Subscriber
+        from webapp.models import User, Subscriber, PreferenceConfig
+        from sqlalchemy.orm import joinedload
     except Exception as exc:
-        print(f"[arxiv bot] skipping db recipients (import error: {exc})")
-        return []
-
+        print(f"[arxiv bot] skipping db preferences (import error: {exc})")
+        return {}
     try:
         app = create_app()
     except Exception as exc:
-        print(f"[arxiv bot] skipping db recipients (app init error: {exc})")
-        return []
+        print(f"[arxiv bot] skipping db preferences (app init error: {exc})")
+        return {}
 
-    emails = set()
-    try:
-        with app.app_context():
-            for model in (Subscriber, User):
-                try:
-                    rows = model.query.with_entities(model.email).all()
-                    for (email,) in rows:
-                        if email:
-                            emails.add(email.strip().lower())
-                except Exception as inner_exc:
-                    print(f"[arxiv bot] unable to read {model.__name__}: {inner_exc}")
-    except Exception as exc:
-        print(f"[arxiv bot] skipping db recipients (db error: {exc})")
-        return []
+    profiles = {}
+    with app.app_context():
+        default_cfg = PreferenceConfig.query.filter_by(user_id=None).first()
+        default_prefs = _combine_preferences(fallback_prefs, default_cfg.as_dict() if default_cfg else {})
+        default_categories = _dedupe_preserve_order(default_prefs.get("categories") or [])
 
-    if emails:
-        print(f"[arxiv bot] loaded {len(emails)} email(s) from database.")
+        users = User.query.options(joinedload(User.preference_config)).all()
+        for user in users:
+            send_to = (user.email or "").strip()
+            normalized = _normalize_email(send_to)
+            if not normalized:
+                continue
+            raw = user.preference_config.as_dict() if getattr(user, "preference_config", None) else {}
+            merged = _combine_preferences(default_prefs, raw)
+            final_prefs = _clone_preferences(merged)
+            final_prefs["categories"] = _dedupe_preserve_order(final_prefs.get("categories") or default_categories)
+            profiles[normalized] = {
+                "prefs": final_prefs,
+                "categories": final_prefs["categories"],
+                "send_to": send_to or normalized,
+            }
+
+        subscriber_rows = Subscriber.query.with_entities(Subscriber.email).all()
+        for (email,) in subscriber_rows:
+            send_to = (email or "").strip()
+            normalized = _normalize_email(send_to)
+            if not normalized or normalized in profiles:
+                continue
+            fallback_clone = _clone_preferences(default_prefs)
+            fallback_clone["categories"] = _dedupe_preserve_order(fallback_clone.get("categories") or default_categories)
+            profiles[normalized] = {
+                "prefs": fallback_clone,
+                "categories": fallback_clone["categories"],
+                "send_to": send_to or normalized,
+            }
+
+    if profiles:
+        print(f"[arxiv bot] loaded {len(profiles)} recipient profile(s) from database.")
     else:
-        print("[arxiv bot] no recipient emails found in database.")
-    return sorted(emails)
+        print("[arxiv bot] no recipient preferences found in database.")
+    return profiles
 
 
-def curate(cfg, results):
+def curate(results, prefs, allowed_categories):
     curated = []
-    prefs = cfg["preferences"]
+    prefs = prefs or {}
+    allowed = _dedupe_preserve_order(allowed_categories or [])
+    min_score = prefs.get("min_score", 1.0)
 
     for r in results:
         title = r.get("title", "")
         summary = r.get("summary", "")
         authors = r.get("authors", [])
-        pdf_url = r.get("pdf_url", "")
-        category = cfg["arxiv"]["categories"][0]
-        url = canon_abs_url(r)
+        url = canon_abs_url(r) or r.get("link", "")
+        paper_categories = r.get("categories") or []
+        primary = r.get("primary_category") or (paper_categories[0] if paper_categories else "")
+        category_for_filter = primary or (paper_categories[0] if paper_categories else "")
 
-        if not match_category(category, cfg["arxiv"]["categories"]):
+        if allowed and category_for_filter:
+            if not match_category(category_for_filter, allowed):
+                continue
+        elif allowed:
             continue
 
         score, details = score_paper(title, summary, authors, prefs)
+        if score < min_score:
+            continue
 
-        if score >= prefs.get("min_score", 1.0):
-            curated.append({
-                "title": title,
-                "summary": summary,
-                "authors": authors,
-                "url": url,
-                "pdf_url": pdf_url,
-                "category": category,
-                "published": r.get("published"),
-                "score": score,
-                "details": details,
-                "arxiv_id": r.get("arxiv_id", "") or (url.split("/")[-1] if url else ""),
-            })
-
-    print(f"[arxiv bot] curated {len(curated)} papers (score ≥ {prefs.get('min_score', 1.0)})")
-    print(f"[arxiv bot] curated {len(curated)} / {len(results)} papers (score ≥ {prefs.get('min_score', 1.0)})")
-    for r in results[:10]:  # show first few raw entries
-        print("→", r["title"][:80])
+        curated.append({
+            "title": title,
+            "summary": summary,
+            "authors": authors,
+            "url": url,
+            "pdf_url": r.get("pdf_url", ""),
+            "category": primary or (paper_categories[0] if paper_categories else (allowed[0] if allowed else "")),
+            "published": r.get("published"),
+            "score": score,
+            "details": details,
+            "arxiv_id": r.get("arxiv_id", "") or (url.split("/")[-1] if url else ""),
+        })
 
     return curated
 
@@ -399,66 +483,117 @@ def make_email_body_for_recipient(user_email, curated, track_base):
 
 def main():
     cfg = load_config()
+    email_cfg = cfg.setdefault("output", {}).setdefault("email", {})
+    subject_prefix = email_cfg.get("subject_prefix", "[arxiv digest]")
 
-    # read testing flag from github secrets (env var)
     test_mode = os.getenv("TEST_MODE", "false").lower() == "true"
-    if test_mode:
-        test_addr = cfg.get("test_recipient", "ashton.davis3@my.utsa.edu")
-        print(f"[arxiv bot] TEST MODE ENABLED — will only send to {test_addr}")
-        cfg["output"]["email"]["to_addrs"] = [test_addr]
-    else:
-        email_cfg = cfg.setdefault("output", {}).setdefault("email", {})
-        existing = email_cfg.get("to_addrs", [])
-        db_recipients = load_db_recipients()
-        combined = sorted({*(addr.strip().lower() for addr in existing if addr), *db_recipients})
-        if combined:
-            email_cfg["to_addrs"] = combined
-        else:
-            email_cfg.setdefault("to_addrs", existing)
-
-    # where your flask app is serving the /like endpoint
-    track_base = (
-        cfg.get("output", {})
-           .get("email", {})
-           .get("track_base", "https://paperscraper-one.vercel.app/")
+    fallback_prefs = merge_preferences(cfg["preferences"])
+    fallback_prefs["categories"] = _dedupe_preserve_order(
+        fallback_prefs.get("categories") or cfg["arxiv"].get("categories") or []
     )
+    cfg["preferences"] = fallback_prefs
+    print("[arxiv bot] fallback preferences:", fallback_prefs)
 
-    cfg["preferences"] = merge_preferences(cfg["preferences"])
-    print("[arxiv bot] merged keywords:", cfg["preferences"])
+    if test_mode:
+        test_addr = (cfg.get("test_recipient") or email_cfg.get("test_recipient") or "").strip()
+        if not test_addr:
+            print("[arxiv bot] TEST MODE enabled but no test_recipient configured; aborting.")
+            return
+        print(f"[arxiv bot] TEST MODE ENABLED — will only send to {test_addr}")
+        normalized = _normalize_email(test_addr)
+        recipient_profiles = {
+            normalized: {
+                "prefs": _clone_preferences(fallback_prefs),
+                "categories": list(fallback_prefs.get("categories") or []),
+                "send_to": test_addr,
+            }
+        }
+        email_cfg["to_addrs"] = [test_addr]
+    else:
+        recipient_profiles = load_db_recipients(fallback_prefs)
+        manual_addrs = [
+            addr.strip()
+            for addr in email_cfg.get("to_addrs", [])
+            if addr and addr.strip()
+        ]
+        for addr in manual_addrs:
+            normalized = _normalize_email(addr)
+            if normalized in recipient_profiles:
+                recipient_profiles[normalized].setdefault("send_to", addr)
+                continue
+            fallback_clone = _clone_preferences(fallback_prefs)
+            fallback_clone["categories"] = _dedupe_preserve_order(fallback_clone.get("categories") or [])
+            recipient_profiles[normalized] = {
+                "prefs": fallback_clone,
+                "categories": fallback_clone["categories"],
+                "send_to": addr,
+            }
+        if not recipient_profiles:
+            print("[arxiv bot] no recipients found; aborting.")
+            return
+        email_cfg["to_addrs"] = [
+            recipient_profiles[key].get("send_to", key)
+            for key in sorted(recipient_profiles)
+        ]
+
+    track_base = email_cfg.get("track_base", "https://paperscraper-one.vercel.app/")
+
+    all_categories = set(cfg["arxiv"].get("categories", []))
+    for profile in recipient_profiles.values():
+        for cat in profile.get("categories") or []:
+            if cat:
+                all_categories.add(cat)
+    if not all_categories:
+        for cat in fallback_prefs.get("categories") or []:
+            all_categories.add(cat)
+    if not all_categories:
+        all_categories.add("astro-ph")
+    cfg["arxiv"]["categories"] = sorted(all_categories)
 
     papers = fetch_recent(cfg)
-    curated = curate(cfg, papers)
-
-    if not curated:
-        print("no matches today.")
-        subject = f'{cfg["output"]["email"]["subject_prefix"]} {dt.date.today()} — 0 papers'
-        # still send a “no matches” note to list (or just to you in test mode)
-        for rcpt in cfg["output"]["email"]["to_addrs"]:
-            send_email(cfg, subject, "no matching papers found today.", "<p>no matches today.</p>", to_override=[rcpt])
-        return
 
     limits = cfg.get("limits", {})
     min_keep = limits.get("min_per_day", 3)
     max_keep = limits.get("max_per_day", 5)
-    base_thr = cfg["preferences"].get("min_score", 1.0)
 
-    selected, eff_thr = select_top(curated, min_keep=min_keep, max_keep=max_keep, base_min_score=base_thr)
-    print(f"[arxiv bot] selected {len(selected)} (effective threshold={eff_thr}) out of {len(curated)} curated")
+    for actual_email in email_cfg["to_addrs"]:
+        key = _normalize_email(actual_email)
+        profile = recipient_profiles.get(key) or {
+            "prefs": _clone_preferences(fallback_prefs),
+            "categories": list(fallback_prefs.get("categories") or []),
+            "send_to": actual_email,
+        }
+        prefs = profile["prefs"]
+        allowed_categories = _dedupe_preserve_order(
+            profile.get("categories") or fallback_prefs.get("categories") or cfg["arxiv"]["categories"]
+        )
+        if not allowed_categories:
+            allowed_categories = ["astro-ph"]
 
-    recipients = cfg["output"]["email"]["to_addrs"]
-    print("[arxiv bot] sending digest to:", recipients)
+        curated = curate(papers, prefs, allowed_categories)
+        print(
+            f"[arxiv bot] {actual_email}: curated {len(curated)} papers "
+            f"(min_score {prefs.get('min_score', 1.0)}) within categories {allowed_categories}"
+        )
+        if not curated:
+            subject = f"{subject_prefix} {dt.date.today()} — 0 papers"
+            send_email(cfg, subject, "no matching papers found today.", "<p>no matches today.</p>", to_override=[actual_email])
+            continue
 
-    n = len(selected)
-    subject = f'{cfg["output"]["email"]["subject_prefix"]} {dt.date.today()} — {n} paper{"s" if n != 1 else ""}'
+        base_thr = prefs.get("min_score", fallback_prefs.get("min_score", 1.0))
+        selected, eff_thr = select_top(curated, min_keep=min_keep, max_keep=max_keep, base_min_score=base_thr)
+        if not selected:
+            subject = f"{subject_prefix} {dt.date.today()} — 0 papers"
+            send_email(cfg, subject, "no matching papers found today.", "<p>no matches today.</p>", to_override=[actual_email])
+            continue
 
-    # personalize for each recipient so their like/dislike links carry their email
-    for rcpt in recipients:
-        text_body, html_body = make_email_body_for_recipient(rcpt, selected, track_base)
-        send_email(cfg, subject, text_body, html_body, to_override=[rcpt])
+        n = len(selected)
+        subject = f"{subject_prefix} {dt.date.today()} — {n} paper{'s' if n != 1 else ''}"
+        print(f"[arxiv bot] {actual_email}: selected {n} papers (effective threshold={eff_thr})")
+        text_body, html_body = make_email_body_for_recipient(actual_email, selected, track_base)
+        send_email(cfg, subject, text_body, html_body, to_override=[actual_email])
 
-    print(f"emailed {n} curated papers to {len(recipients)} recipient(s).")
-
+    print(f"[arxiv bot] processed {len(email_cfg['to_addrs'])} recipient(s).")
 
 if __name__ == "__main__":
     main()
-
