@@ -593,14 +593,14 @@ def _send_subscription_email(to_email: str, kind: str = "welcome") -> bool:
         text = (
             "we've removed you from the digest mailing list.\n\n"
             "if this was a mistake, you can rejoin any time at https://paperscraper-one.vercel.app/"
-            " or by emailing arxivastrophbot@gmail.com with the subject 'subscribe'.\n\n"
+            " or by emailing thearxivpaperscraper@gmail.com with the subject 'subscribe'.\n\n"
             "-- digest bot"
         )
         html = (
             "<p>we've removed you from the <strong>digest</strong> mailing list.</p>"
             "<p>changed your mind? hop back in at "
             '<a href="https://paperscraper-one.vercel.app/">paperscraper-one.vercel.app</a> or send an email with the subject '
-            "<code>subscribe</code> to arxivastrophbot@gmail.com.</p>"
+            "<code>subscribe</code> to thearxivpaperscraper@gmail.com.</p>"
             "<p>clear skies!</p>"
         )
     else:

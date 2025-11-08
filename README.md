@@ -107,7 +107,7 @@ paper_scraper/
 ---
 
 ### HOW TO SUBSCRIBE/UNSUBSCRIBE
-- **subscribe:** send an email with the subject `subscribe` to `arxivastrophbot@gmail.com`
+- **subscribe:** send an email with the subject `subscribe` to `thearxivpaperscraper@gmail.com`
 - **unsubscribe:** send an email with the subject `unsubscribe`
 
 the bot will automatically update the mailing list every 15 minutes and send a welcome/farewell message
@@ -147,7 +147,7 @@ authors:
 ### DEPARTMENT SETUP (for admins)
 if you're setting this up for a department or research group:
 
-1. create a gmail account for the bot (e.g. `arxivastrophbot@gmail.com`)
+1. create a gmail account for the bot (e.g. `thearxivpaperscraper@gmail.com`)
 
 2. enable **app passwords** in the google account and create one for “mail”.
 

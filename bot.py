@@ -317,8 +317,6 @@ def render_paper_entry_html(paper, user_email, track_base):
         summary_html, has_math = render_inline_math_html(summary_wrapped)
         parts.append(f"<p>{summary_html}</p>")
 
-    print("[email summary raw]", repr(summary_text))
-
     parts.append(
         f"<p><a href='{like_link}'>👍 like</a> | <a href='{dislike_link}'>👎 dislike</a></p>"
     )
