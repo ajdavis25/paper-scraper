@@ -31,3 +31,4 @@ secrets/token.json
 astroph-bot/scratch/*.py
 logs/*
 make_admin.py
+scratch/*
