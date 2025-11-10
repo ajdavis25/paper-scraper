@@ -221,7 +221,7 @@ you can tweak formatting, add emojis, or include links to institutional papers e
 ---
 
 ### CREDITS
-built by ashton davis @ utsa
+independent project built by ashton davis (utsa physics, m.s. student)
 runs daily at 8:00 am cst via github actions.
 this project is open-source and hackable, PRs welcome.
 
