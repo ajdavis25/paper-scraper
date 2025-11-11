@@ -1,5 +1,6 @@
-import re, os, yaml, feedparser, requests, datetime as dt
-import copy
+import re, os, yaml, feedparser, requests, copy, time, datetime as dt
+from flask import json
+import json as pyjson  # stdlib json for caching
 from filters import score_paper, match_category
 from mailer import send_email
 from curator import merge_preferences
@@ -123,12 +124,14 @@ def load_config(path=None):
 
 
 def build_search_query(cfg):
-    cats = cfg["arxiv"].get("categories", ["astro-ph.CO"])
+    cats = set(cfg["arxiv"].get("categories", []))
     # properly join categories
+    if not cats:
+        return "cat:astro-ph"
     if len(cats) > 1:
         cat_query = " OR ".join([f"cat:{c}" for c in cats])
     else:
-        cat_query = f"cat:{cats[0]}"
+        cat_query = f"cat:{list(cats)[0]}"
     return cat_query
 
 
@@ -171,6 +174,10 @@ def fetch_recent(cfg):
                 data = resp.text
         else:
             data = resp.text
+
+        # detect arXiv throttle
+        if "Rate exceeded" in data:
+            raise RuntimeError("Rate exceeded")
 
         if "<entry>" not in data:
             print("[arxiv bot] warning: no <entry> tags in feed XML!")
@@ -221,6 +228,52 @@ def fetch_recent(cfg):
     return results
 
 
+def safe_fetch_recent(*args, **kwargs):
+    for attempt in range(3):
+        try:
+            return fetch_recent(*args, **kwargs)
+        except requests.exceptions.ReadTimeout:
+            print(f"[warn] arXiv timeout, retrying ({attempt+1}/3)...")
+            time.sleep(5)
+        except Exception as e:
+            # handle "Rate exceeded" explicitly
+            if "Rate exceeded" in str(e):
+                print("[warn] arXiv rate limit hit, sleeping for 60s...")
+                time.sleep(60)
+                continue
+            # surface other errors
+            raise
+    print("[error] fetch_recent failed after retries")
+    return []
+
+
+# simple on-disk cache to avoid hammering arXiv during tests
+CACHE_FILE = "cached_arxiv.json"
+
+def load_or_fetch(*args, **kwargs):
+    """load cached results if <1h old; otherwise fetch and cache (if non-empty)."""
+    try:
+        if os.path.exists(CACHE_FILE) and time.time() - os.path.getmtime(CACHE_FILE) < 3600:
+            print(f"[cache] using cached results from {CACHE_FILE}")
+            with open(CACHE_FILE, "r", encoding="utf-8") as f:
+                return pyjson.load(f)
+    except Exception as e:
+        print(f"[cache] warning: could not read cache ({e})")
+
+    results = safe_fetch_recent(*args, **kwargs)
+
+    # only write cache if we actually got entries (avoid caching failures/throttle pages)
+    if results:
+        try:
+            with open(CACHE_FILE, "w", encoding="utf-8") as f:
+                pyjson.dump(results, f)
+            print(f"[cache] saved new results to {CACHE_FILE}")
+        except Exception as e:
+            print(f"[cache] warning: could not save cache ({e})")
+
+    return results
+
+
 def load_db_recipients(fallback_prefs):
     """fetch recipient preference profiles from the database, if available."""
     try:
@@ -239,7 +292,12 @@ def load_db_recipients(fallback_prefs):
     profiles = {}
     with app.app_context():
         default_cfg = PreferenceConfig.query.filter_by(user_id=None).first()
-        default_prefs = _combine_preferences(fallback_prefs, default_cfg.as_dict() if default_cfg else {})
+        if default_cfg:
+            default_prefs = _standardize_preferences(
+                _combine_preferences(fallback_prefs, default_cfg.as_dict())
+            )
+        else:
+            default_prefs = _standardize_preferences(fallback_prefs)
         default_categories = _dedupe_preserve_order(default_prefs.get("categories") or [])
 
         users = User.query.options(joinedload(User.preference_config)).all()
@@ -248,13 +306,15 @@ def load_db_recipients(fallback_prefs):
             normalized = _normalize_email(send_to)
             if not normalized:
                 continue
-            raw = user.preference_config.as_dict() if getattr(user, "preference_config", None) else {}
-            merged = _combine_preferences(default_prefs, raw)
-            final_prefs = _clone_preferences(merged)
-            final_prefs["categories"] = _dedupe_preserve_order(final_prefs.get("categories") or default_categories)
+            pref_cfg = getattr(user, "preference_config", None)
+            if pref_cfg:
+                final_prefs = _standardize_preferences(pref_cfg.as_dict())
+            else:
+                final_prefs = _standardize_preferences(default_prefs)
+            final_categories = final_prefs.get("categories", [])
             profiles[normalized] = {
                 "prefs": final_prefs,
-                "categories": final_prefs["categories"],
+                "categories": final_categories,
                 "send_to": send_to or normalized,
             }
 
@@ -264,8 +324,8 @@ def load_db_recipients(fallback_prefs):
             normalized = _normalize_email(send_to)
             if not normalized or normalized in profiles:
                 continue
-            fallback_clone = _clone_preferences(default_prefs)
-            fallback_clone["categories"] = _dedupe_preserve_order(fallback_clone.get("categories") or default_categories)
+            fallback_clone = _standardize_preferences(default_prefs)
+            fallback_clone["categories"] = list(default_categories)
             profiles[normalized] = {
                 "prefs": fallback_clone,
                 "categories": fallback_clone["categories"],
@@ -279,9 +339,16 @@ def load_db_recipients(fallback_prefs):
     return profiles
 
 
-def curate(results, prefs, allowed_categories):
+def curate(results, prefs, allowed_categories, fallback_prefs=None, email=None):
     curated = []
-    prefs = prefs or {}
+
+    # handle preference fallback explicitly
+    if prefs is None:
+        prefs = fallback_prefs or {}
+        print(f"[debug] using fallback prefs for {email or 'unknown user'}")
+    else:
+        print(f"[debug] using user prefs for {email or 'unknown user'}")
+
     allowed = _dedupe_preserve_order(allowed_categories or [])
     min_score = prefs.get("min_score", 1.0)
 
@@ -294,16 +361,20 @@ def curate(results, prefs, allowed_categories):
         primary = r.get("primary_category") or (paper_categories[0] if paper_categories else "")
         category_for_filter = primary or (paper_categories[0] if paper_categories else "")
 
+        # category filter
         if allowed and category_for_filter:
             if not match_category(category_for_filter, allowed):
                 continue
         elif allowed:
             continue
 
+        # scoring
         score, details = score_paper(title, summary, authors, prefs)
+        print(f"[debug] paper '{title}' score={score} details={details}")
         if score < min_score:
             continue
 
+        # add to curated list
         curated.append({
             "title": title,
             "summary": summary,
@@ -317,6 +388,7 @@ def curate(results, prefs, allowed_categories):
             "arxiv_id": r.get("arxiv_id", "") or (url.split("/")[-1] if url else ""),
         })
 
+    print(f"[debug] curated {len(curated)} papers for {email or 'unknown user'} (min_score={min_score})")
     return curated
 
 
@@ -481,19 +553,49 @@ def make_email_body_for_recipient(user_email, curated, track_base):
     return "\n".join(text_blocks), html_body
 
 
+def _standardize_preferences(prefs):
+    normalized = _clone_preferences(prefs or {})
+    if "any_keywords" not in normalized and normalized.get("keywords") is not None:
+        normalized["any_keywords"] = list(normalized.get("keywords") or [])
+    if "all_keywords" not in normalized and normalized.get("required_keywords") is not None:
+        normalized["all_keywords"] = list(normalized.get("required_keywords") or [])
+    if "exclude_keywords" not in normalized and normalized.get("excluded_keywords") is not None:
+        normalized["exclude_keywords"] = list(normalized.get("excluded_keywords") or [])
+    for key in (
+        "any_keywords",
+        "all_keywords",
+        "exclude_keywords",
+        "authors",
+        "keywords",
+        "excluded_keywords",
+        "required_keywords",
+    ):
+        if isinstance(normalized.get(key), list):
+            normalized[key] = _dedupe_preserve_order(normalized[key])
+    normalized["categories"] = _dedupe_preserve_order(normalized.get("categories") or [])
+    if normalized.get("min_score") is None:
+        normalized["min_score"] = 1.0
+    return normalized
+
+
 def main():
     cfg = load_config()
     email_cfg = cfg.setdefault("output", {}).setdefault("email", {})
     subject_prefix = email_cfg.get("subject_prefix", "[arxiv digest]")
+    preferences = cfg.get("preferences", {})
+    print(f"[debug] global preferences:", json.dumps(preferences, indent=2))
+    print(f"[debug] email preferences:", json.dumps(email_cfg.get("preferences", {}), indent=2))
 
     test_mode = os.getenv("TEST_MODE", "false").lower() == "true"
-    fallback_prefs = merge_preferences(cfg["preferences"])
-    fallback_prefs["categories"] = _dedupe_preserve_order(
-        fallback_prefs.get("categories") or cfg["arxiv"].get("categories") or []
-    )
+    fallback_prefs = _standardize_preferences(merge_preferences(cfg["preferences"]))
+    if not fallback_prefs.get("categories"):
+        fallback_prefs["categories"] = _dedupe_preserve_order(
+            cfg["arxiv"].get("categories") or []
+        )
     cfg["preferences"] = fallback_prefs
     print("[arxiv bot] fallback preferences:", fallback_prefs)
 
+    recipient_profiles = {}
     if test_mode:
         test_addr = (cfg.get("test_recipient") or email_cfg.get("test_recipient") or "").strip()
         if not test_addr:
@@ -501,14 +603,17 @@ def main():
             return
         print(f"[arxiv bot] TEST MODE ENABLED — will only send to {test_addr}")
         normalized = _normalize_email(test_addr)
-        recipient_profiles = {
-            normalized: {
-                "prefs": _clone_preferences(fallback_prefs),
-                "categories": list(fallback_prefs.get("categories") or []),
+        db_profiles = load_db_recipients(fallback_prefs)
+        profile = db_profiles.get(normalized)
+        if not profile:
+            clone = _standardize_preferences(fallback_prefs)
+            profile = {
+                "prefs": clone,
+                "categories": clone["categories"],
                 "send_to": test_addr,
             }
-        }
-        email_cfg["to_addrs"] = [test_addr]
+        recipient_profiles = {normalized: profile}
+        email_cfg["to_addrs"] = [profile.get("send_to", test_addr)]
     else:
         recipient_profiles = load_db_recipients(fallback_prefs)
         manual_addrs = [
@@ -521,8 +626,7 @@ def main():
             if normalized in recipient_profiles:
                 recipient_profiles[normalized].setdefault("send_to", addr)
                 continue
-            fallback_clone = _clone_preferences(fallback_prefs)
-            fallback_clone["categories"] = _dedupe_preserve_order(fallback_clone.get("categories") or [])
+            fallback_clone = _standardize_preferences(fallback_prefs)
             recipient_profiles[normalized] = {
                 "prefs": fallback_clone,
                 "categories": fallback_clone["categories"],
@@ -538,6 +642,7 @@ def main():
 
     track_base = email_cfg.get("track_base", "https://paperscraper-one.vercel.app/")
 
+    # union categories across recipients to widen the fetch query a bit (still cached)
     all_categories = set(cfg["arxiv"].get("categories", []))
     for profile in recipient_profiles.values():
         for cat in profile.get("categories") or []:
@@ -550,7 +655,8 @@ def main():
         all_categories.add("astro-ph")
     cfg["arxiv"]["categories"] = sorted(all_categories)
 
-    papers = fetch_recent(cfg)
+    # use cached+safe fetch instead of raw fetch
+    papers = load_or_fetch(cfg)
 
     limits = cfg.get("limits", {})
     min_keep = limits.get("min_per_day", 3)
@@ -558,11 +664,15 @@ def main():
 
     for actual_email in email_cfg["to_addrs"]:
         key = _normalize_email(actual_email)
-        profile = recipient_profiles.get(key) or {
-            "prefs": _clone_preferences(fallback_prefs),
-            "categories": list(fallback_prefs.get("categories") or []),
-            "send_to": actual_email,
-        }
+        profile = recipient_profiles.get(key)
+        if not profile:
+            clone = _standardize_preferences(fallback_prefs)
+            profile = {
+                "prefs": clone,
+                "categories": clone["categories"],
+                "send_to": actual_email,
+            }
+            recipient_profiles[key] = profile
         prefs = profile["prefs"]
         allowed_categories = _dedupe_preserve_order(
             profile.get("categories") or fallback_prefs.get("categories") or cfg["arxiv"]["categories"]
@@ -570,7 +680,8 @@ def main():
         if not allowed_categories:
             allowed_categories = ["astro-ph"]
 
-        curated = curate(papers, prefs, allowed_categories)
+        print(f"[debug] prefs for", actual_email, json.dumps(prefs, indent=2))
+        curated = curate(papers, prefs, allowed_categories, fallback_prefs=fallback_prefs, email=actual_email)
         print(
             f"[arxiv bot] {actual_email}: curated {len(curated)} papers "
             f"(min_score {prefs.get('min_score', 1.0)}) within categories {allowed_categories}"

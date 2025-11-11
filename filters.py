@@ -32,9 +32,8 @@ def _normalize(s):
     return s
 
 
-def match_category(primary_cat, patterns):
-    if not patterns: return True
-    return any(fnmatch.fnmatch(primary_cat or "", pat) for pat in patterns)
+def match_category(cat, allowed):
+    return any(cat == a or cat.startswith(a + ".") for a in allowed)
 
 
 def score_paper(title, abstract, authors, prefs):

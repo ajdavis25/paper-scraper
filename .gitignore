@@ -18,6 +18,7 @@ user_feedback.txt
 config.yaml
 config.example.yaml
 feedback.json
+cached_arxiv.json
 
 # ide / jupyter / system files
 .ipynb_checkpoints/
