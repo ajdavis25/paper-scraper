@@ -12,65 +12,85 @@
   <img src="https://img.shields.io/github/stars/ajdavis25/paper-scraper?style=social" alt="Stars">
 </p>
 
-built out of spite because stanford gatekept vox charta
+> built out of spite because stanford gatekept vox charta
 
 ---
 
 ### WHAT THIS DOES
-this bot automatically fetches the latest **arXiv papers**, filters them by keywords and author preferences, and emails a **daily curated digest** to the mailing list.  
+this bot automatically fetches the latest **arXiv papers**, filters them by **keywords** and **author preferences**, and emails a **daily curated digest** to the mailing list.  
 
 it includes:
-- a default topic profile (`defaults.yaml`) for new subscribers.
-- personalization logic to build individual profiles over time (based on what papers you click/like — coming soon).
-- a subscription system (send “subscribe” / “unsubscribe” to join or leave the list).
-- daily automation via github actions.
+- a default topic profile (`defaults.yaml`) for new subscribers  
+- personalized scoring logic (based on what you click or like — coming soon)  
+- email subscription system (`subscribe` / `unsubscribe` via gmail)  
+- daily automation through **github actions**  
+- optional **flask dashboard** for managing preferences and feedback  
 
 ---
 
 ### REPO STRUCTURE
 ```text
 paper_scraper/
-├── .env                             # environment variables (api keys, credentials, gmail app password, etc.)
-├── .github/workflows/               # github actions for automation
-│   ├── check_subscriptions.yml      # validates and cleans up subscriber list on schedule
-│   └── daily_digest.yml             # runs the daily paper curation + email digest pipeline
-├── assets/                          # branding and static assets (banner.png, icons, etc.)
-├── bot.py                           # main entrypoint for running the daily arxiv digest bot
-├── config.py
-├── config.yaml                      # central configuration (arXiv filters, smtp settings, output options)
-├── curator.py                       # handles paper ranking, keyword filtering, and relevance scoring
-├── database.db                      # sqlite database used by the web dashboard and feedback tracker
-├── filters.py                       # keyword filters and paper scoring logic
-├── mailer.py                        # shared email sending helper used by both bot and web app
-├── shared/                          # cross-module utilities shared between bot and flask webapp
-│   ├── mail.py                      # email helpers (smtp, html/plaintext formatting)
-│   ├── utils.py                     # general helper functions (yaml io, arXiv query builders, etc.)
-│   └── db.py                        # lightweight database connector for user feedback
-├── scripts/                         # command-line tools for direct subscription control
+├── .github/workflows/               # github actions for automated tasks
+│   ├── daily_digest.yml             # runs the daily arXiv curation + email digest pipeline
+│   └── renew_watch.yml              # renews gmail push-notification watch token weekly
+│
+├── assets/                          # branding and static assets (banner, icons, etc.)
+│   └── banner.png
+│
+├── bot.py                           # main entry point for the daily arXiv digest bot
+├── config.yaml                      # primary configuration (arXiv filters, SMTP, output options)
+├── config.py                        # loads and validates configuration settings
+├── curator.py                       # handles paper ranking, keyword filtering, and scoring
+├── filters.py                       # keyword matching and scoring logic for relevance ranking
+├── mailer.py                        # email-sending helper shared by bot and web app
+│
+├── shared/                          # shared modules between bot and Flask web app
+│   ├── db.py                        # lightweight database connector for feedback tracking
+│   ├── mail.py                      # HTML/plaintext email formatting utilities
+│   ├── utils.py                     # general helpers (YAML I/O, arXiv query builders, etc.)
+│   ├── gmail_auth.py                # OAuth-based gmail API authentication helper
+│   └── gmail_push.py                # gmail push-notification setup for Pub/Sub
+│
+├── scripts/                         # command-line utilities for admin and subscription tasks
+│   ├── backfill_user_accounts.py    # retroactively syncs email users into the DB
+│   ├── gmail_watch.py               # re-registers gmail watch (used by renew_watch.yml)
 │   ├── subscribe_bot.py             # adds new users to the mailing list
 │   └── unsubscribe_bot.py           # removes users from the mailing list
-├── webapp/                          # flask front-end + backend for user interaction
-│   ├── routes_frontend.py           # user-facing pages (dashboard, preferences, feedback, etc.)
-│   ├── routes_backend.py            # api routes for preferences, recommendations, and feedback
-│   ├── templates/                   # html templates (jinja2) for all web views
-│   ├── static/                      # front-end assets served by flask
+│
+├── webapp/                          # flask-based web front-end and backend
+│   ├── app.py                       # flask application factory / entry point
+│   ├── models.py                    # SQLAlchemy ORM models (User, Paper, Preference, etc.)
+│   ├── routes_frontend.py           # user-facing routes (index, dashboard, preferences)
+│   ├── routes_backend.py            # API endpoints for feedback and subscriptions
+│   ├── templates/                   # jinja2 HTML templates for web views
+│   ├── static/                      # static front-end assets
 │   │   ├── css/style.css            # main site stylesheet
-│   │   ├── js/                      # javascript modules for interactive pages
-│   │   │   ├── dashboard.js         # manages preferences + feedback form submission
-│   │   │   ├── recommendations.js   # handles like/dislike actions on recommended papers
-│   │   │   └── subscriptions.js     # handles subscribe/unsubscribe ui
-│   │   └── img/                     # local images (banner, icons)
-│   ├── feedback.db                  # stores like/dislike history and user feedback
-│   ├── user_feedback.txt            # plaintext fallback log for feedback (optional)
-│   └── user_prefs.yaml              # stores each user's saved preferences (keywords, authors, etc.)
-├── notebooks/                       # dev notes or experimental analysis in jupyter
-├── secrets/                         # oauth tokens and gmail credentials (never commit these!)
-│   ├── credentials.json
-│   └── token.json
-├── tests/                           # unit tests and verification scripts
+│   │   ├── js/dashboard.js          # handles dashboard interactivity
+│   │   ├── js/recommendations.js    # like/dislike event logic for recommended papers
+│   │   └── js/subscriptions.js      # subscribe/unsubscribe UI logic
+│   ├── user_feedback.txt            # plaintext fallback log for user feedback (optional)
+│   └── user_prefs.yaml              # stores user preference data (keywords, authors, etc.)
+│
+├── notebooks/                       # jupyter notebooks for prototyping and dev notes
+│   └── notes.ipynb
+│
 ├── vercel.json                      # deployment configuration for vercel hosting
-└── README.md                        # this documentation file
+├── render.yaml                      # alternate deployment configuration (Render.com)
+├── requirements.txt                 # python dependencies
+└── README.md                        # this
 ```
+
+---
+
+### CONFIGURATION FILES
+two local YAML files control how the bot behaves:
+- `config.yaml`
+  - defines which arXiv categories to scrape, scoring thresholds, and email / SMTP settings.
+- `defaults.yaml`
+  - default topic filters and authors applied to new subscribers
+
+these files are **not tracked by git.**
 
 ---
 
@@ -101,16 +121,57 @@ paper_scraper/
     
 5. run the bot:
     ```bash
-    `python bot.py`
+    python bot.py
     ```
 
 ---
 
+### WEB DASHBOARD
+to view or manage subscriptions through a browser:
+
+```bash
+python -m flask --app webapp.app run --debug
+```
+
+then open [http://localhost:5000](http://localhost:5000)
+
+the dashboard lets you:
+- view your daily digests
+- edit keyword / author preferences
+- send feedback
+
+> vercel deploys automatically using the same entrypoint (`application = app`)
+
+---
+
+### EXAMPLE config.yaml
+
+```yaml
+arxiv:
+  categories: [astro-ph.CO, astro-ph.EP, astro-ph.GA, astro-ph.HE, astro-ph.IM, astro-ph.SR]
+  max_results: 100
+  days_back: 1
+
+preferences:
+  any_keywords: [EHT, event horizon telescope, Sgr A*, M87, MHD, GRMHD, black hole, jet, accretion]
+  exclude_keywords: [education, review, tutorial]
+  authors: [Anantua, Curd, Järvelä, Quataert, Gebhardt]
+  min_score: 1.0
+
+output:
+  email:
+    from_addr: thearxivpaperscraper@gmail.com
+    subject_prefix: "[arxiv digest]"
+```
+
+---
+
 ### HOW TO SUBSCRIBE/UNSUBSCRIBE
+- **visit** https://paperscraper-one.vercel.app/ or
 - **subscribe:** send an email with the subject `subscribe` to `thearxivpaperscraper@gmail.com`
 - **unsubscribe:** send an email with the subject `unsubscribe`
 
-the bot will automatically update the mailing list every 15 minutes and send a welcome/farewell message
+the bot will automatically update the mailing list and send a welcome/farewell message
 
 ---
 
@@ -213,10 +274,42 @@ def is_relevant(paper, prefs):
 html and plain-text bodies are built in `mailer.py`
 you can tweak formatting, add emojis, or include links to institutional papers easily.
 
+#### architecture overview
+```mermaid
+graph TD
+    A[arXiv RSS] -->|fetch| B[bot.py]
+    B -->|filter & score| C[curator.py]
+    C --> D[mailer.py]
+    D -->|send| E[Gmail SMTP]
+    B -->|update| F[webapp/database]
+```
+
 #### for developers
+tested with **python 3.11+**
+
+run linting / debugging locally:
+
+```bash
+python -m flask --app webapp.app run --debug
+pytest -q
+```
+
 - flask backend (in `webapp/`) can be used for future user dashboards or manual curation.
 - the bot is modular: new sources (ADS, NASA, etc.) can be integrated with new parser modules under `parsers.py`.
 - PRs are welcome - just don't break the 8am cst vibe.
+
+---
+
+### SECURITY
+- please don't commit `.env`, `config.yaml`, or anything under `secrets/`.
+- gmail API tokens (`token.json`) should remain private.
+- all sensitive files are ignored via `.gitignore` and `.vercelignore`.
+
+---
+
+### LICENSE
+
+**MIT License © 2025 Ashton Davis**
 
 ---
 

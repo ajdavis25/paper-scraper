@@ -6,9 +6,7 @@ compatible with flask cli and vercel/wsgi deploy.
 import os, sys, traceback
 from pathlib import Path
 
-# ----------------------------------------------------------
 # ensure consistent import path (avoids duplicate module loading)
-# ----------------------------------------------------------
 pkg_root = Path(__file__).resolve().parent.parent
 if str(pkg_root) not in sys.path:
     sys.path.insert(0, str(pkg_root))
@@ -16,9 +14,7 @@ if str(pkg_root) not in sys.path:
 print("app.py loaded", file=sys.stderr)
 print("ENV VARS LOADED:", list(os.environ.keys()), file=sys.stderr)
 
-# ----------------------------------------------------------
 # application factory import + error guard
-# ----------------------------------------------------------
 try:
     # use the absolute import - not relative
     from webapp import create_app
@@ -26,9 +22,7 @@ try:
     app = create_app()
     application = app  # for vercel / wsgi compatibility
 
-    # ==========================================================
-    # DEBUG: print all registered SQLAlchemy model classes (2.x API)
-    # ==========================================================
+    # debug: print all registered SQLAlchemy model classes (2.x API)
     from shared.db import db
 
     print("\n=== SQLAlchemy registered model classes ===", file=sys.stderr)

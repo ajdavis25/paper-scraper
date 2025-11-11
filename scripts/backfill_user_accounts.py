@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Ensure every subscriber has a placeholder User account.
+ensure every subscriber has a placeholder User account.
 
-Run once (or as needed) to let legacy email-only subscribers finish signup.
+run once (or as needed) to let legacy email-only subscribers finish signup.
 """
 from __future__ import annotations
 

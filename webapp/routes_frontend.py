@@ -1,5 +1,15 @@
 #!/usr/bin/env python3
-from flask import Blueprint, render_template, request, jsonify, abort, redirect, url_for, flash, session
+from flask import (
+    Blueprint,
+    render_template,
+    request,
+    jsonify,
+    abort,
+    redirect,
+    url_for,
+    flash,
+    session,
+)
 from flask_login import current_user, login_required, login_user, logout_user
 from werkzeug.security import generate_password_hash, check_password_hash
 from itsdangerous import SignatureExpired, BadSignature
@@ -11,7 +21,14 @@ import xml.etree.ElementTree as ET
 
 from shared.db import db
 from webapp.account_utils import ensure_user_stub
-from webapp.models import User, Paper, UserPreference, Subscriber, Feedback, PreferenceConfig
+from webapp.models import (
+    User,
+    Paper,
+    UserPreference,
+    Subscriber,
+    Feedback,
+    PreferenceConfig,
+)
 from shared.utils import get_user_by_email
 from shared.mail import send_reset_email, get_serializer, send_email
 import os
@@ -217,13 +234,20 @@ def login():
                 return redirect(url_for("frontend.login"))
 
             user = get_user_by_email(email)
-            if user and user.password_hash and check_password_hash(user.password_hash, password):
+            if (
+                user
+                and user.password_hash
+                and check_password_hash(user.password_hash, password)
+            ):
                 login_user(user)
                 # ensure logged-in users are in subscriber list
                 normalized_email = email.strip().lower()
-                if normalized_email and not Subscriber.query.filter(
-                    func.lower(Subscriber.email) == normalized_email
-                ).first():
+                if (
+                    normalized_email
+                    and not Subscriber.query.filter(
+                        func.lower(Subscriber.email) == normalized_email
+                    ).first()
+                ):
                     db.session.add(Subscriber(email=normalized_email))
                     db.session.commit()
                 session["is_admin"] = bool(user.is_admin)
@@ -238,7 +262,9 @@ def login():
                 return redirect(url_for("frontend.signup"))
 
             if not user:
-                subscriber = Subscriber.query.filter(func.lower(Subscriber.email) == email).first()
+                subscriber = Subscriber.query.filter(
+                    func.lower(Subscriber.email) == email
+                ).first()
                 if subscriber:
                     ensure_user_stub(email)
                     flash(
@@ -273,7 +299,10 @@ def subscribe():
             email = request.form.get("email", "").strip().lower()
 
         if not email:
-            return jsonify({"status": "error", "message": "please enter a valid email."}), 400
+            return (
+                jsonify({"status": "error", "message": "please enter a valid email."}),
+                400,
+            )
 
         try:
             existing = Subscriber.query.filter(
@@ -297,58 +326,47 @@ def subscribe():
 
 
 @frontend.route("/unsubscribe", methods=["GET", "POST"])
-
 def unsubscribe():
-
     if request.method == "POST":
-
         if request.is_json:
-
             data = request.get_json(force=True)
-
             email = data.get("email", "").strip().lower()
-
         else:
-
             email = request.form.get("email", "").strip().lower()
 
-
-
         if not email:
-
-            return jsonify({"status": "error", "message": "please enter a valid email."}), 400
-
-
+            return (
+                jsonify({"status": "error", "message": "please enter a valid email."}),
+                400,
+            )
 
         try:
-
             sub = Subscriber.query.filter(func.lower(Subscriber.email) == email).first()
-
             if not sub:
-
-                return jsonify({"status": "info", "message": "email not found -- you may already be unsubscribed."})
-
-
+                return jsonify(
+                    {
+                        "status": "info",
+                        "message": "email not found -- you may already be unsubscribed.",
+                    }
+                )
 
             db.session.delete(sub)
-
             db.session.commit()
-
             print(f"[unsubscribe] removed {email}")
 
             _send_subscription_email(email, "farewell")
 
-            return jsonify({"status": "success", "message": "you have been unsubscribed. farewell!"})
+            return jsonify(
+                {
+                    "status": "success",
+                    "message": "you have been unsubscribed. farewell!",
+                }
+            )
 
         except Exception as e:
-
             print(f"[unsubscribe] error: {e}")
-
             db.session.rollback()
-
             return jsonify({"status": "error", "message": "server error"}), 500
-
-
 
     return render_template("unsubscribe.html")
 
@@ -370,7 +388,9 @@ def dashboard_redirect():
 def dashboard(email):
     user = User.query.filter_by(email=email.lower()).first()
     if not user:
-        return render_template("dashboard.html", user={"email": email}, prefs=[], message="no user found.")
+        return render_template(
+            "dashboard.html", user={"email": email}, prefs=[], message="no user found."
+        )
 
     liked_prefs = (
         UserPreference.query.filter_by(user_id=user.id, liked=True)
@@ -423,7 +443,9 @@ def dashboard(email):
             print(f"[dashboard] failed to persist fetched titles: {exc}")
 
     message = "read anything super yet?" if not prefs else None
-    return render_template("dashboard.html", user={"email": email}, prefs=prefs, message=message)
+    return render_template(
+        "dashboard.html", user={"email": email}, prefs=prefs, message=message
+    )
 
 
 @frontend.route("/signup", methods=["GET", "POST"])
@@ -444,7 +466,9 @@ def signup():
             except Exception as exc:
                 db.session.rollback()
                 print(f"[signup] error claiming user: {exc}")
-                flash("we couldn't finish sign-up. please try again in a moment.", "error")
+                flash(
+                    "we couldn't finish sign-up. please try again in a moment.", "error"
+                )
                 return redirect(url_for("frontend.signup"))
 
             login_user(existing_user)
@@ -459,7 +483,9 @@ def signup():
             db.session.add(new_user)
 
             # automatically subscribe new accounts if they are not already in the list
-            existing_sub = Subscriber.query.filter(func.lower(Subscriber.email) == email).first()
+            existing_sub = Subscriber.query.filter(
+                func.lower(Subscriber.email) == email
+            ).first()
             if not existing_sub:
                 db.session.add(Subscriber(email=email))
 
@@ -525,9 +551,7 @@ def reset_password(token):
     return render_template("reset_password.html", email=email)
 
 
-# ----------------------------------------------------------
 # send feedback (contact form)
-# ----------------------------------------------------------
 def _env_mail_config():
     """
     fallback mail configuration that mirrors config.yaml structure using environment variables.
@@ -555,7 +579,8 @@ def _env_mail_config():
         "mail": {
             "smtp_host": os.getenv("SMTP_HOST", "smtp.gmail.com"),
             "smtp_port": port,
-            "use_starttls": os.getenv("SMTP_USE_STARTTLS", "true").lower() not in {"false", "0", "no"},
+            "use_starttls": os.getenv("SMTP_USE_STARTTLS", "true").lower()
+            not in {"false", "0", "no"},
             "username": from_addr,
             "from_addr": from_addr,
             "password_env": os.getenv("PASSWORD_ENV", "EMAIL_PASS"),
@@ -575,7 +600,9 @@ def _load_mail_config():
         print(f"[mail-config] yaml error: {e}")
         fallback = _env_mail_config()
         if not fallback:
-            print("[mail-config] no config.yaml and no MAIL_/EMAIL_ env vars available.")
+            print(
+                "[mail-config] no config.yaml and no MAIL_/EMAIL_ env vars available."
+            )
         return fallback
 
 
@@ -613,7 +640,7 @@ def _send_subscription_email(to_email: str, kind: str = "welcome") -> bool:
         )
         html = (
             "<p>welcome aboard! you'll now receive the daily <strong>digest</strong>."
-            "</p><p>sign up at <a href=\"https://paperscraper-one.vercel.app/\">paperscraper-one.vercel.app</a> to claim your account "
+            '</p><p>sign up at <a href="https://paperscraper-one.vercel.app/">paperscraper-one.vercel.app</a> to claim your account '
             "and begin customizing your preferences and curate the papers you care about.</p><p>clear skies!</p>"
         )
 
@@ -647,7 +674,9 @@ def _fetch_arxiv_titles(arxiv_ids: list[str]) -> dict[str, str]:
                 raw_id = (entry_id.text or "").strip() if entry_id is not None else ""
                 arxiv_id = raw_id.split("/abs/")[-1] if raw_id else ""
                 title_el = entry.find("atom:title", ns)
-                title_text = (title_el.text or "").strip() if title_el is not None else ""
+                title_text = (
+                    (title_el.text or "").strip() if title_el is not None else ""
+                )
                 if arxiv_id and title_text:
                     titles[arxiv_id] = title_text
         except Exception as exc:
@@ -713,9 +742,7 @@ def user_feedback():
     return jsonify({"message": "feedback sent!"}), 200
 
 
-# ----------------------------------------------------------
 # recommendations page
-# ----------------------------------------------------------
 @frontend.route("/recommendations")
 @login_required
 def recommendations():
@@ -733,11 +760,21 @@ def recommendations():
         prefs = (
             config.as_dict()
             if config
-            else {"keywords": [], "excluded_keywords": [], "categories": ["astro-ph"], "min_score": 1.0}
+            else {
+                "keywords": [],
+                "excluded_keywords": [],
+                "categories": ["astro-ph"],
+                "min_score": 1.0,
+            }
         )
     except SQLAlchemyError as e:
         print(f"[recommendations] db error loading prefs: {e}")
-        prefs = {"keywords": [], "excluded_keywords": [], "categories": ["astro-ph"], "min_score": 1.0}
+        prefs = {
+            "keywords": [],
+            "excluded_keywords": [],
+            "categories": ["astro-ph"],
+            "min_score": 1.0,
+        }
 
     keywords = prefs.get("keywords") or []
     excluded_keywords = prefs.get("excluded_keywords") or []
@@ -778,7 +815,9 @@ def recommendations():
     keyword_terms = [k.strip() for k in keywords if k and k.strip()]
     encoded_terms = [f'all:"{quote_plus(k)}"' for k in keyword_terms]
     if not encoded_terms:
-        return render_template("recommendations.html", recs=[], message="no valid keywords provided.")
+        return render_template(
+            "recommendations.html", recs=[], message="no valid keywords provided."
+        )
 
     keyword_terms_lower = [k.lower() for k in keyword_terms]
     excluded_terms_lower = [
@@ -879,10 +918,10 @@ def recommendations():
     return render_template("recommendations.html", recs=scored, message=msg)
 
 
-# ----------------------------------------------------------
 # record recommendation feedback (like/dislike)
-# ----------------------------------------------------------
-def _record_recommendation_feedback(email: str, arxiv_id: str, liked: bool, source: str = "recommendations"):
+def _record_recommendation_feedback(
+    email: str, arxiv_id: str, liked: bool, source: str = "recommendations"
+):
     """shared helper to store recommendation feedback."""
     email = (email or "").strip().lower()
     arxiv_id = (arxiv_id or "").strip()
@@ -893,19 +932,25 @@ def _record_recommendation_feedback(email: str, arxiv_id: str, liked: bool, sour
 
     paper = Paper.query.filter_by(arxiv_id=arxiv_id).first()
     if not paper:
-        paper = Paper(arxiv_id=arxiv_id, title="", link=f"https://arxiv.org/abs/{arxiv_id}")
+        paper = Paper(
+            arxiv_id=arxiv_id, title="", link=f"https://arxiv.org/abs/{arxiv_id}"
+        )
         db.session.add(paper)
         db.session.flush()
 
     if user:
-        pref = UserPreference.query.filter_by(user_id=user.id, paper_id=paper.id).first()
+        pref = UserPreference.query.filter_by(
+            user_id=user.id, paper_id=paper.id
+        ).first()
         if not pref:
             pref = UserPreference(user_id=user.id, paper_id=paper.id, liked=liked)
             db.session.add(pref)
         else:
             pref.liked = liked
     else:
-        print(f"[recommendation-feedback] no user account for {email}; skipping preference sync.")
+        print(
+            f"[recommendation-feedback] no user account for {email}; skipping preference sync."
+        )
 
     fb_entry = Feedback(
         name="system",
@@ -919,7 +964,9 @@ def _record_recommendation_feedback(email: str, arxiv_id: str, liked: bool, sour
     db.session.add(fb_entry)
     db.session.commit()
 
-    print(f"[recommendation-feedback] saved like={liked} for {arxiv_id} ({email}) via {source}")
+    print(
+        f"[recommendation-feedback] saved like={liked} for {arxiv_id} ({email}) via {source}"
+    )
 
 
 @frontend.route("/api/recommendation-feedback", methods=["POST"])
@@ -935,7 +982,9 @@ def recommendation_feedback():
         return jsonify({"error": "missing email or link"}), 400
 
     try:
-        _record_recommendation_feedback(email, arxiv_id, liked, source="recommendations")
+        _record_recommendation_feedback(
+            email, arxiv_id, liked, source="recommendations"
+        )
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
     except Exception as exc:
@@ -956,7 +1005,9 @@ def like_from_email():
     try:
         _record_recommendation_feedback(email, arxiv_id, liked, source="email")
         heading = "thanks for your feedback!"
-        message = f"we recorded your {'like' if liked else 'dislike'} for arXiv:{arxiv_id}."
+        message = (
+            f"we recorded your {'like' if liked else 'dislike'} for arXiv:{arxiv_id}."
+        )
         status = 200
     except ValueError:
         heading = "missing information"
@@ -978,9 +1029,7 @@ def like_from_email():
     )
 
 
-# ----------------------------------------------------------
 # view feedback (admin-only page)
-# ----------------------------------------------------------
 @frontend.route("/view-feedback", methods=["GET"])
 @login_required
 def view_feedback_page():
@@ -1006,8 +1055,8 @@ def view_feedback_page():
     feedback = [
         {
             "email": r.email,
-            "arxiv_id": r.arxiv_id,                                 # now a real id like "0812.0365v1"
-            "liked": bool(r.liked),                                 # True/False -> ✓/✗ in template
+            "arxiv_id": r.arxiv_id,  # now a real id like "0812.0365v1"
+            "liked": bool(r.liked),  # True/False -> ✓/✗ in template
             "timestamp": r.timestamp.strftime("%Y-%m-%d %H:%M"),
             "source": "recommendations",
         }
@@ -1017,26 +1066,27 @@ def view_feedback_page():
     return render_template("feedback.html", feedback=feedback)
 
 
-# ----------------------------------------------------------
 # info page
-# ----------------------------------------------------------
 @frontend.route("/info")
 def info_page():
     """show information about the digest and usage."""
     sample_digest = [
         {
             "title": "probing dark matter substructure with lensed quasars",
-            "category": "astro-ph.CO", "score": 3.0,
+            "category": "astro-ph.CO",
+            "score": 3.0,
             "summary": "concise analysis of strong-lensing flux anomalies as subhalo probes.",
         },
         {
             "title": "machine-learning forecasts for gravitational-wave events",
-            "category": "astro-ph.IM", "score": 4.0,
+            "category": "astro-ph.IM",
+            "score": 4.0,
             "summary": "overview of a random-forest pipeline that predicts merger rates from detector telemetry.",
         },
         {
             "title": "turbulence-regulated star formation in molecular clouds",
-            "category": "astro-ph.GA", "score": 2.0,
+            "category": "astro-ph.GA",
+            "score": 2.0,
             "summary": "simulation-driven insight into how feedback preserves Larson-like scaling.",
         },
     ]

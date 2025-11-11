@@ -15,9 +15,7 @@ import yaml
 import xml.etree.ElementTree as ET
 
 
-# ---------------------------------------------------------------------------
 # YAML helpers
-# ---------------------------------------------------------------------------
 def load_yaml(path):
     """safely load YAML into a python object."""
     try:
@@ -37,9 +35,7 @@ def save_yaml(path, data):
         print(f"[save_yaml] error writing {path}: {e}")
 
 
-# ---------------------------------------------------------------------------
 # arXiv helpers
-# ---------------------------------------------------------------------------
 def build_arxiv_query(keywords, max_results=5):
     """
     construct an arXiv API query string given keywords.
@@ -743,9 +739,7 @@ def fetch_arxiv_feed(url):
         return []
 
 
-# ---------------------------------------------------------------------------
 # user helper
-# ---------------------------------------------------------------------------
 def get_user_by_email(email):
     """fetch user by email, or return None."""
     # import here to avoid circular import at module import time

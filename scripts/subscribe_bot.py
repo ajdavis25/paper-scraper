@@ -141,7 +141,7 @@ def mark_as_read(service, msg_id):
 
 
 def add_to_database(new_email):
-    """Insert subscriber into the database if not already present."""
+    """insert subscriber into the database if not already present."""
     try:
         from webapp import create_app
         from webapp.models import Subscriber

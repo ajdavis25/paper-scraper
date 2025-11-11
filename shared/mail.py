@@ -52,7 +52,8 @@ def send_reset_email(email, link):
 
 
 def send_email(cfg, subject, text, html=None, *, to_override=None):
-    """send email via gmail smtp using config.yaml -> output.email.
+    """
+    send email via gmail smtp using config.yaml -> output.email.
 
     `cfg` may be the full config dict or just the `output.email` section.
     Pass `to_override` (iterable or string) to override the recipient list.

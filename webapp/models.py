@@ -4,9 +4,7 @@ from datetime import datetime
 from flask_login import UserMixin
 from shared.db import db
 
-# ---------------------------------------------------------------------------
 # mixins
-# ---------------------------------------------------------------------------
 class TimestampMixin:
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     updated_at = db.Column(
@@ -14,9 +12,7 @@ class TimestampMixin:
         onupdate=datetime.utcnow, nullable=False
     )
 
-# ---------------------------------------------------------------------------
 # core tables
-# ---------------------------------------------------------------------------
 class User(db.Model, UserMixin, TimestampMixin):
     __tablename__ = "user"
 

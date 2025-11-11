@@ -61,9 +61,7 @@ def api_preferences():
         return jsonify({"error": str(exc)}), 500
 
 
-# ---------------------------------------------------------------------------
-# Gmail push webhook
-# ---------------------------------------------------------------------------
+# gmail push webhook
 def _verify_pubsub_jwt(req) -> bool:
     """verify the OIDC token attached to push requests (if configured)."""
     audience = os.getenv("PUBSUB_OIDC_AUDIENCE")
