@@ -144,6 +144,7 @@ def build_search_query(cfg):
 def fetch_recent(cfg):
     import urllib.parse
     import gzip
+    import time
 
     max_results = cfg["arxiv"].get("max_results", 50)
     query = build_search_query(cfg)
@@ -176,7 +177,6 @@ def fetch_recent(cfg):
                 data = content.decode("utf-8", errors="ignore")
                 print("[arxiv bot] decompressed gzip response")
             except Exception:
-                # fall back silently if it's not actually gzipped
                 data = resp.text
         else:
             data = resp.text
@@ -197,10 +197,18 @@ def fetch_recent(cfg):
     results = []
 
     for entry in feed.entries:
+        # choose updated date if available (more accurate for new versions)
         try:
-            pub = dt.datetime.fromisoformat(entry.published.replace("Z", "+00:00"))
+            if getattr(entry, "updated_parsed", None):
+                pub = dt.datetime.fromtimestamp(time.mktime(entry.updated_parsed)).astimezone(dt.timezone.utc)
+            else:
+                pub = dt.datetime.fromisoformat(entry.published.replace("Z", "+00:00"))
         except Exception:
             pub = dt.datetime.now(dt.timezone.utc)
+
+        # skip papers older than our days_back threshold
+        if pub < since:
+            continue
 
         entry_id = getattr(entry, "id", "")
         m = _ARXIV_ID_RE.search(entry_id) or _ARXIV_ID_RE.search(getattr(entry, "link", ""))
@@ -208,6 +216,7 @@ def fetch_recent(cfg):
 
         summary_text = decode_unicode_escapes(entry.summary.strip())
         summary_text = wrap_inline_tex(summary_text)
+
         categories = []
         primary_category = ""
         for tag in getattr(entry, "tags", []) or []:
@@ -218,6 +227,7 @@ def fetch_recent(cfg):
             primary_category = getattr(entry.arxiv_primary_category, "term", "") or ""
         if not primary_category and categories:
             primary_category = categories[0]
+
         results.append({
             "title": entry.title.strip(),
             "summary": summary_text,
@@ -230,7 +240,7 @@ def fetch_recent(cfg):
             "primary_category": primary_category,
         })
 
-    print(f"[arxiv bot] fetched {len(results)} papers (max {max_results})")
+    print(f"[arxiv bot] fetched {len(results)} papers (newer than {since.date()}, max {max_results})")
     return results
 
 
