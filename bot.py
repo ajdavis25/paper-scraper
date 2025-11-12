@@ -328,11 +328,10 @@ def load_or_fetch(*args, **kwargs):
 
     # fallback: fetch new results and save
     results = safe_fetch_recent(*args, **kwargs)
-    if results:
-        try:
-            _write_cache_safely(results)
-        except Exception as e:
-            print(f"[cache] warning: could not save cache ({e})")
+    try:
+        _write_cache_safely(results or [])
+    except Exception as e:
+        print(f"[cache] warning: could not save cache ({e})")
 
     return results
 
