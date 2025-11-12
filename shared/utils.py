@@ -4,15 +4,9 @@ general-purpose helpers for arxiv digest.
 """
 from __future__ import annotations
 
-import html
-import json
-import re
+import html, json, re, requests, yaml, xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Tuple
-
-import requests
-import yaml
-import xml.etree.ElementTree as ET
 
 
 # YAML helpers

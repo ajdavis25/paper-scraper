@@ -15,9 +15,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from itsdangerous import SignatureExpired, BadSignature
 from sqlalchemy import func
 from markupsafe import Markup
-import yaml
-import requests
-import xml.etree.ElementTree as ET
+import yaml, requests, os, xml.etree.ElementTree as ET
 
 from shared.db import db
 from webapp.account_utils import ensure_user_stub
@@ -31,7 +29,6 @@ from webapp.models import (
 )
 from shared.utils import get_user_by_email
 from shared.mail import send_reset_email, get_serializer, send_email
-import os
 
 SUBCATEGORY_EXPANSIONS = {
     "astro-ph": [

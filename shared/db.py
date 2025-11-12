@@ -14,9 +14,7 @@ the goals:
 
 from __future__ import annotations
 
-import os
-import sqlite3
-import tempfile
+import os, sqlite3, tempfile
 from contextlib import suppress
 from pathlib import Path
 from typing import Optional

@@ -4,8 +4,7 @@ promote a user to admin status in the configured database.
 usage: python make_admin.py user@example.com
 """
 
-import os
-import sys
+import os, sys
 
 from sqlalchemy import text
 

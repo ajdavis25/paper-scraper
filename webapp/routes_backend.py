@@ -2,10 +2,7 @@
 """
 backend routes that power the dashboard / JSON APIs.
 """
-import base64
-import json
-import os
-import re
+import base64, json, os, re
 
 from flask import Blueprint, request, jsonify
 from flask_login import current_user, login_required

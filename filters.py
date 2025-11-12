@@ -1,4 +1,4 @@
-import fnmatch, re, unicodedata
+import re, unicodedata
 
 def _normalize(s: str) -> str:
     """

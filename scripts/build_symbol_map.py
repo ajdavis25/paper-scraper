@@ -1,5 +1,4 @@
-import json
-import re
+import json, re
 from pathlib import Path
 
 

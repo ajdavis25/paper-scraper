@@ -3,10 +3,8 @@ helpers for gmail push notifications (token refresh, watch, history, message fet
 """
 from __future__ import annotations
 
-import os
+import os, requests
 from typing import Iterable, Optional
-
-import requests
 
 GMAIL_API_ROOT = "https://gmail.googleapis.com/gmail/v1/users/me"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
