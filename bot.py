@@ -1,4 +1,4 @@
-import re, os, yaml, feedparser, requests, copy, time, datetime as dt
+import re, os, yaml, feedparser, requests, copy, time, tempfile, datetime as dt
 from flask import json
 import json as pyjson  # stdlib json for caching
 from filters import score_paper, match_category
@@ -15,6 +15,12 @@ print(f"[arxiv bot] running: {__file__} SHA={os.environ.get('GITHUB_SHA', 'local
 
 # arXiv id pattern and canonical link helper
 _ARXIV_ID_RE = re.compile(r'(?:arxiv\.org/(?:abs|pdf)/)?(\d{4}\.\d{4,5})(v\d+)?', re.I)
+
+# simple on-disk cache to avoid hammering arXiv during tests
+CACHE_FILE = "cached_arxiv.json"
+
+_LAST_FETCH = 0
+_MIN_INTERVAL = 3.0  # seconds between requests
 
 
 def canon_abs_url(paper):
@@ -229,6 +235,15 @@ def fetch_recent(cfg):
 
 
 def safe_fetch_recent(*args, **kwargs):
+    global _LAST_FETCH
+    now = time.time()
+    if now - _LAST_FETCH < _MIN_INTERVAL:
+        delay = _MIN_INTERVAL - (now - _LAST_FETCH)
+        print(f"[arxiv bot] waiting {delay:.1f}s to respect rate limit...")
+        time.sleep(delay)
+
+    _LAST_FETCH = time.time()
+    # existing logic below
     for attempt in range(3):
         try:
             return fetch_recent(*args, **kwargs)
@@ -247,27 +262,65 @@ def safe_fetch_recent(*args, **kwargs):
     return []
 
 
-# simple on-disk cache to avoid hammering arXiv during tests
-CACHE_FILE = "cached_arxiv.json"
+def _write_cache_safely(results):
+    """
+    write the arXiv results to cache atomically with a timestamp.
+    the file is only replaced if the write fully succeeds.
+    """
+    payload = {
+        "timestamp": time.time(),
+        "results": results,
+    }
+
+    tmp_fd, tmp_path = tempfile.mkstemp(prefix="cache_", suffix=".json")
+    try:
+        with os.fdopen(tmp_fd, "w", encoding="utf-8") as f:
+            pyjson.dump(payload, f, ensure_ascii=False, indent=2)
+            f.flush()
+            os.fsync(f.fileno())  # ensure bytes hit disk
+        os.replace(tmp_path, CACHE_FILE)  # atomic replace
+        print(f"[cache] safely wrote {CACHE_FILE}")
+    except Exception as e:
+        print(f"[cache] failed to write cache: {e}")
+        try:
+            os.remove(tmp_path)
+        except OSError:
+            pass
+
 
 def load_or_fetch(*args, **kwargs):
-    """load cached results if <1h old; otherwise fetch and cache (if non-empty)."""
-    try:
-        if os.path.exists(CACHE_FILE) and time.time() - os.path.getmtime(CACHE_FILE) < 3600:
-            print(f"[cache] using cached results from {CACHE_FILE}")
+    """
+    load cached results if <1h old and JSON is valid;
+    otherwise fetch and rebuild the cache.
+    """
+    max_age = 3600  # 1 hour
+
+    if os.path.exists(CACHE_FILE):
+        try:
             with open(CACHE_FILE, "r", encoding="utf-8") as f:
-                return pyjson.load(f)
-    except Exception as e:
-        print(f"[cache] warning: could not read cache ({e})")
+                data = pyjson.load(f)
 
+            # validate structure
+            if not isinstance(data, dict) or "results" not in data:
+                raise ValueError("malformed cache file")
+
+            age = time.time() - data.get("timestamp", 0)
+            if age < max_age:
+                print(f"[cache] using cached results from {CACHE_FILE} ({age:.0f}s old)")
+                return data["results"]
+            else:
+                print(f"[cache] cache too old ({age:.0f}s); refetching...")
+
+        except pyjson.JSONDecodeError:
+            print("[cache] corrupt cache detected — ignoring and refetching")
+        except Exception as e:
+            print(f"[cache] warning: could not read cache ({e})")
+
+    # fallback: fetch new results and save
     results = safe_fetch_recent(*args, **kwargs)
-
-    # only write cache if we actually got entries (avoid caching failures/throttle pages)
     if results:
         try:
-            with open(CACHE_FILE, "w", encoding="utf-8") as f:
-                pyjson.dump(results, f)
-            print(f"[cache] saved new results to {CACHE_FILE}")
+            _write_cache_safely(results)
         except Exception as e:
             print(f"[cache] warning: could not save cache ({e})")
 
