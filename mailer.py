@@ -1,78 +1,66 @@
-import os, smtplib
+import os, base64, smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from dotenv import load_dotenv
+from google.oauth2.credentials import Credentials
+from google.auth.transport.requests import Request
 
-# load local .env if present
 load_dotenv()
 
 
+def _ensure_gmail_tokens():
+    """
+    decode Base64 environment variables on Vercel into local secrets/ files.
+    """
+    os.makedirs("secrets", exist_ok=True)
+    creds_path = "secrets/credentials.json"
+    token_path = "secrets/token.json"
+
+    if os.getenv("GMAIL_CREDENTIALS_B64"):
+        with open(creds_path, "wb") as f:
+            f.write(base64.b64decode(os.getenv("GMAIL_CREDENTIALS_B64")))
+    if os.getenv("GMAIL_TOKEN_B64"):
+        with open(token_path, "wb") as f:
+            f.write(base64.b64decode(os.getenv("GMAIL_TOKEN_B64")))
+
+    return creds_path, token_path
+
+
+def _get_oauth2_string(username, creds):
+    """generate the SASL XOAUTH2 string."""
+    auth_str = f"user={username}\1auth=Bearer {creds.token}\1\1"
+    return base64.b64encode(auth_str.encode("utf-8")).decode("utf-8")
+
+
 def send_email(cfg, subject, text_body, html_body, to_override=None):
-    """
-    send an email using credentials from environment variables
-    or config.yaml (via cfg["output"]["email"]).
-
-    the yaml config should define:
-      output:
-        email:
-          from_addr: ...
-          to_addrs: [...]
-          username: ...
-          password_env: "EMAIL_PASS"   # environment variable name
-          smtp_host: "smtp.gmail.com"
-          smtp_port: 587
-          use_starttls: true
-
-    optionally, pass `to_override=["someone@example.com"]`
-    to override the configured recipient list.
-    """
     em = cfg["output"]["email"]
-
-    # load password
-    password = os.getenv(em.get("password_env", "EMAIL_PASS"), "")
-    if not password:
-        raise RuntimeError(
-            f"missing password in environment variable: {em.get('password_env', 'EMAIL_PASS')}"
-        )
-
     recipients = to_override or em.get("to_addrs", [])
     if not recipients:
-        print("[mailer] warning: no recipients found in config.yaml")
+        print("[mailer] warning: no recipients found")
         return
 
+    creds_path, token_path = _ensure_gmail_tokens()
+    creds = Credentials.from_authorized_user_file(token_path)
+    if creds.expired and creds.refresh_token:
+        creds.refresh(Request())
+        with open(token_path, "w") as f:
+            f.write(creds.to_json())
+
     try:
-        with smtplib.SMTP(em["smtp_host"], em["smtp_port"]) as s:
-            if em.get("use_starttls", True):
-                s.starttls()
+        with smtplib.SMTP("smtp.gmail.com", 587) as s:
+            s.starttls()
+            auth_string = _get_oauth2_string(em["from_addr"], creds)
+            s.docmd("AUTH", "XOAUTH2 " + auth_string)
 
-            try:
-                print("[mailer debug]", {
-                "username": em["username"],
-                "password_length": len(password),
-                "password_preview": password[:4] + "..." if password else None
-            })
-                s.login(em["username"], password)
-            except smtplib.SMTPAuthenticationError as e:
-                print("[mailer] gmail rejected credentials — please recheck EMAIL_FROM / EMAIL_PASS in your .env")
-                print(f"[details] {e.smtp_error.decode('utf-8')}")
-                return
-            except Exception as e:
-                print(f"[mailer] unexpected error during login: {e}")
-                return
-
-            for addr in (to_override or em["to_addrs"]):
+            for addr in recipients:
                 msg = MIMEMultipart("alternative")
-                msg["subject"] = subject
-                msg["from"] = em["from_addr"]
-                msg["to"] = addr
+                msg["Subject"] = subject
+                msg["From"] = em["from_addr"]
+                msg["To"] = addr
                 msg.attach(MIMEText(text_body, "plain", "utf-8"))
                 msg.attach(MIMEText(html_body, "html", "utf-8"))
-
-                try:
-                    s.sendmail(em["from_addr"], addr, msg.as_bytes())
-                    print(f"[mailer] sent email to {addr}")
-                except Exception as e:
-                    print(f"[mailer] failed to send email to {addr}: {e}")
+                s.sendmail(em["from_addr"], addr, msg.as_bytes())
+                print(f"[mailer] sent email to {addr}")
 
     except Exception as e:
         print(f"[mailer] fatal error: {e}")
