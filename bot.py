@@ -1,4 +1,4 @@
-import re, os, yaml, feedparser, requests, copy, time, tempfile, datetime as dt
+import re, os, yaml, feedparser, requests, copy, time, tempfile, datetime as dt, argparse
 from flask import json
 import json as pyjson  # stdlib json for caching
 from filters import score_paper, match_category
@@ -18,6 +18,8 @@ _ARXIV_ID_RE = re.compile(r'(?:arxiv\.org/(?:abs|pdf)/)?(\d{4}\.\d{4,5})(v\d+)?'
 
 # simple on-disk cache to avoid hammering arXiv during tests
 CACHE_FILE = "cached_arxiv.json"
+_CACHE_MAX_AGE = 4 * 3600
+_CACHE_MIN_ITEMS = 10
 
 _LAST_FETCH = 0
 _MIN_INTERVAL = 3.0  # seconds between requests
@@ -298,42 +300,62 @@ def _write_cache_safely(results):
             pass
 
 
-def load_or_fetch(*args, **kwargs):
-    """
-    load cached results if <1h old and JSON is valid;
-    otherwise fetch and rebuild the cache.
-    """
-    max_age = 3600  # 1 hour
+def _parse_args():
+    parser = argparse.ArgumentParser(description="arxiv digest bot")
+    parser.add_argument("--no-cache", action="store_true", help="force fresh pull from arxiv")
+    return parser.parse_args()
 
-    if os.path.exists(CACHE_FILE):
+
+def load_or_fetch(cfg, *, use_cache=True, max_age=_CACHE_MAX_AGE, min_items=_CACHE_MIN_ITEMS):
+    cached_payload = None
+    cache_reason = ""
+    if use_cache and os.path.exists(CACHE_FILE):
         try:
             with open(CACHE_FILE, "r", encoding="utf-8") as f:
-                data = pyjson.load(f)
-
-            # validate structure
-            if not isinstance(data, dict) or "results" not in data:
-                raise ValueError("malformed cache file")
-
-            age = time.time() - data.get("timestamp", 0)
-            if age < max_age:
-                print(f"[cache] using cached results from {CACHE_FILE} ({age:.0f}s old)")
-                return data["results"]
-            else:
-                print(f"[cache] cache too old ({age:.0f}s); refetching...")
-
+                cached_payload = pyjson.load(f)
+            valid, info = _validate_cache_payload(cached_payload, max_age, min_items)
+            if valid:
+                age = info
+                results = cached_payload["results"]
+                print(f"[cache] using cached results from {CACHE_FILE} (age={int(age)}s, items={len(results)})")
+                return results, "cache-ok"
+            cache_reason = info
+            print(f"[cache] cache not suitable ({cache_reason}) — refetching")
         except pyjson.JSONDecodeError:
-            print("[cache] corrupt cache detected — ignoring and refetching")
-        except Exception as e:
-            print(f"[cache] warning: could not read cache ({e})")
+            cached_payload, cache_reason = None, "corrupt"
+            print("[cache] corrupt cache detected — refetching")
+        except Exception as exc:
+            cached_payload, cache_reason = None, f"read-error:{exc}"
+            print(f"[cache] warning: could not read cache ({exc})")
+    fresh_results = safe_fetch_recent(cfg)
+    if len(fresh_results) >= min_items:
+        try:
+            _write_cache_safely(fresh_results)
+        except Exception as exc:
+            print(f"[cache] warning: could not save cache ({exc})")
+        return fresh_results, "fresh-fetch"
+    print(f"[cache] fresh fetch returned {len(fresh_results)} items (<{min_items}); not caching")
+    if cached_payload and isinstance(cached_payload.get("results"), list) and cached_payload["results"]:
+        print(f"[cache] falling back to cached results despite ({cache_reason or 'unknown'})")
+        return cached_payload["results"], f"stale-fallback:{cache_reason or 'unknown'}"
+    return fresh_results, "fresh-insufficient"
 
-    # fallback: fetch new results and save
-    results = safe_fetch_recent(*args, **kwargs)
-    try:
-        _write_cache_safely(results or [])
-    except Exception as e:
-        print(f"[cache] warning: could not save cache ({e})")
 
-    return results
+def _validate_cache_payload(payload, max_age, min_items):
+    if not isinstance(payload, dict):
+        return False, "malformed"
+    results = payload.get("results")
+    if not isinstance(results, list):
+        return False, "missing-results"
+    timestamp = payload.get("timestamp")
+    if not isinstance(timestamp, (int, float)):
+        return False, "missing-timestamp"
+    age = time.time() - timestamp
+    if age > max_age:
+        return False, f"stale:{int(age)}s"
+    if len(results) < min_items:
+        return False, f"too-few-items:{len(results)}"
+    return True, age
 
 
 def load_db_recipients(fallback_prefs):
@@ -641,6 +663,7 @@ def _standardize_preferences(prefs):
 
 
 def main():
+    args = _parse_args()
     cfg = load_config()
     email_cfg = cfg.setdefault("output", {}).setdefault("email", {})
     subject_prefix = email_cfg.get("subject_prefix", "[arxiv digest]")
@@ -718,7 +741,9 @@ def main():
     cfg["arxiv"]["categories"] = sorted(all_categories)
 
     # use cached+safe fetch instead of raw fetch
-    papers = load_or_fetch(cfg)
+    papers, cache_source = load_or_fetch(cfg, use_cache=not args.no_cache)
+    papers = papers or []
+    print(f"[arxiv bot] using {cache_source} dataset with {len(papers)} entries")
 
     limits = cfg.get("limits", {})
     min_keep = limits.get("min_per_day", 3)
