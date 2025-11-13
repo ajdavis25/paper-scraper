@@ -188,7 +188,7 @@ def fetch_recent(cfg):
             print(data[:500])
     except Exception as e:
         print(f"error: could not fetch from arXiv: {e}")
-        return []
+        raise
 
     feed = feedparser.parse(data)
     print(f"[arxiv bot] feedparser found {len(feed.entries)} entries")
