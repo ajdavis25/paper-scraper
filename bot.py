@@ -246,13 +246,30 @@ def fetch_recent(cfg):
     if not results and raw_results and newest_pub:
         skew = now - newest_pub
         skew_days = skew.total_seconds() / 86400 if newest_pub.tzinfo else skew.total_seconds() / 86400
-        # treat big gaps as clock skew and fall back to latest available batch
-        if skew_days > max(7, days_back * 2):
+        # treat big gaps as clock skew and fall back to a window relative to newest entry
+        skew_limit = max(7, days_back * 2)
+        if skew_days > skew_limit:
             print(
                 f"[arxiv bot] warning: newest arXiv entry is {newest_pub.date()} "
-                f"but cutoff is {since.date()} - assuming clock skew and returning latest results."
+                f"but cutoff is {since.date()} - assuming clock skew."
             )
-            results = list(raw_results)
+            fallback_span = max(days_back, 1)
+            fallback_since = newest_pub - dt.timedelta(days=fallback_span)
+            filtered = [
+                r for r in raw_results
+                if r.get("published") and r["published"] >= fallback_since
+            ]
+            if filtered:
+                print(
+                    f"[arxiv bot] keeping {len(filtered)} paper(s) from "
+                    f"{fallback_since.date()} onward (relative to newest entry)."
+                )
+                results = filtered
+            else:
+                print(
+                    "[arxiv bot] fallback window still empty — returning latest feed entries."
+                )
+                results = list(raw_results)
 
     print(f"[arxiv bot] fetched {len(results)} papers (newer than {since.date()}, max {max_results})")
     return results
