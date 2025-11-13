@@ -146,7 +146,8 @@ def fetch_recent(cfg):
     max_results = cfg["arxiv"].get("max_results", 50)
     query = build_search_query(cfg)
     days_back = cfg["arxiv"].get("days_back", 1)
-    since = dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=days_back)
+    now = dt.datetime.now(dt.timezone.utc)
+    since = now - dt.timedelta(days=days_back)
 
     base = "https://export.arxiv.org/api/query"
     encoded_query = urllib.parse.quote(query, safe="+:()")
@@ -192,6 +193,8 @@ def fetch_recent(cfg):
     feed = feedparser.parse(data)
     print(f"[arxiv bot] feedparser found {len(feed.entries)} entries")
     results = []
+    raw_results = []
+    newest_pub = None
 
     for entry in feed.entries:
         # choose updated date if available (more accurate for new versions)
@@ -202,10 +205,6 @@ def fetch_recent(cfg):
                 pub = dt.datetime.fromisoformat(entry.published.replace("Z", "+00:00"))
         except Exception:
             pub = dt.datetime.now(dt.timezone.utc)
-
-        # skip papers older than our days_back threshold
-        if pub < since:
-            continue
 
         entry_id = getattr(entry, "id", "")
         m = _ARXIV_ID_RE.search(entry_id) or _ARXIV_ID_RE.search(getattr(entry, "link", ""))
@@ -225,7 +224,7 @@ def fetch_recent(cfg):
         if not primary_category and categories:
             primary_category = categories[0]
 
-        results.append({
+        record = {
             "title": entry.title.strip(),
             "summary": summary_text,
             "published": pub,
@@ -235,7 +234,25 @@ def fetch_recent(cfg):
             "authors": [a.name for a in getattr(entry, "authors", [])],
             "categories": categories,
             "primary_category": primary_category,
-        })
+        }
+
+        raw_results.append(record)
+        if newest_pub is None or (pub and pub > newest_pub):
+            newest_pub = pub
+
+        if pub >= since:
+            results.append(record)
+
+    if not results and raw_results and newest_pub:
+        skew = now - newest_pub
+        skew_days = skew.total_seconds() / 86400 if newest_pub.tzinfo else skew.total_seconds() / 86400
+        # treat big gaps as clock skew and fall back to latest available batch
+        if skew_days > max(7, days_back * 2):
+            print(
+                f"[arxiv bot] warning: newest arXiv entry is {newest_pub.date()} "
+                f"but cutoff is {since.date()} - assuming clock skew and returning latest results."
+            )
+            results = list(raw_results)
 
     print(f"[arxiv bot] fetched {len(results)} papers (newer than {since.date()}, max {max_results})")
     return results
