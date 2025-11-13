@@ -685,6 +685,11 @@ def main():
     print(f"[debug] global preferences:", json.dumps(preferences, indent=2))
     print(f"[debug] email preferences:", json.dumps(email_cfg.get("preferences", {}), indent=2))
 
+    today = dt.datetime.now(dt.timezone.utc)
+    if today.weekday() >= 5:
+        print(f"[arxiv bot] {today.strftime('%A')} detected — skipping weekend run.")
+        return
+
     test_mode = os.getenv("TEST_MODE", "false").lower() == "true"
     fallback_prefs = _standardize_preferences(merge_preferences(cfg["preferences"]))
     if not fallback_prefs.get("categories"):
@@ -788,15 +793,13 @@ def main():
             f"(min_score {prefs.get('min_score', 1.0)}) within categories {allowed_categories}"
         )
         if not curated:
-            subject = f"{subject_prefix} {dt.date.today()} — 0 papers"
-            send_email(cfg, subject, "no matching papers found today.", "<p>no matches today.</p>", to_override=[actual_email])
+            print(f"[arxiv bot] {actual_email}: no papers met the criteria; not sending email.")
             continue
 
         base_thr = prefs.get("min_score", fallback_prefs.get("min_score", 1.0))
         selected, eff_thr = select_top(curated, min_keep=min_keep, max_keep=max_keep, base_min_score=base_thr)
         if not selected:
-            subject = f"{subject_prefix} {dt.date.today()} — 0 papers"
-            send_email(cfg, subject, "no matching papers found today.", "<p>no matches today.</p>", to_override=[actual_email])
+            print(f"[arxiv bot] {actual_email}: curated papers failed selection; not sending email.")
             continue
 
         n = len(selected)
