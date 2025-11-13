@@ -254,6 +254,9 @@ def fetch_recent(cfg):
                 f"but cutoff is {since.date()} - assuming clock skew."
             )
             fallback_span = max(days_back, 1)
+            # widen the window to cover the observed skew, capped at 30 days
+            if skew_days > fallback_span:
+                fallback_span = min(int(skew_days) + 1, 30)
             fallback_since = newest_pub - dt.timedelta(days=fallback_span)
             filtered = [
                 r for r in raw_results
