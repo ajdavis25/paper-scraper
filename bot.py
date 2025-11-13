@@ -102,11 +102,6 @@ def load_config(path=None):
     load yaml config, automatically detecting path from cli or repo layout.
     works both locally and in github actions.
     """
-    import sys
-
-    # allow explicit cli arg
-    if not path and len(sys.argv) > 1:
-        path = sys.argv[1]
 
     # default fallbacks
     candidates = []
@@ -303,6 +298,7 @@ def _write_cache_safely(results):
 def _parse_args():
     parser = argparse.ArgumentParser(description="arxiv digest bot")
     parser.add_argument("--no-cache", action="store_true", help="force fresh pull from arxiv")
+    parser.add_argument("config_path", nargs="?", help="path to config file (defaults to config.yaml)")
     return parser.parse_args()
 
 
@@ -664,7 +660,8 @@ def _standardize_preferences(prefs):
 
 def main():
     args = _parse_args()
-    cfg = load_config()
+    config_path = args.config_path or "config.yaml"
+    cfg = load_config(config_path)
     email_cfg = cfg.setdefault("output", {}).setdefault("email", {})
     subject_prefix = email_cfg.get("subject_prefix", "[arxiv digest]")
     preferences = cfg.get("preferences", {})
