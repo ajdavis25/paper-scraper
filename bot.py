@@ -1,4 +1,4 @@
-import re, os, yaml, feedparser, requests, copy, time, tempfile, datetime as dt, argparse, gzip
+import re, os, yaml, feedparser, requests, copy, time, tempfile, datetime as dt, argparse, gzip, math
 from flask import json
 import json as pyjson  # stdlib json for caching
 from filters import score_paper, match_category
@@ -138,6 +138,15 @@ def build_search_query(cfg):
     return cat_query
 
 
+def _format_submitted_date(dt_obj: dt.datetime) -> str:
+    """arXiv API expects YYYYMMDDHHMM in UTC for submittedDate filters."""
+    if dt_obj.tzinfo is None:
+        dt_obj = dt_obj.replace(tzinfo=dt.timezone.utc)
+    else:
+        dt_obj = dt_obj.astimezone(dt.timezone.utc)
+    return dt_obj.strftime("%Y%m%d%H%M")
+
+
 def _download_arxiv_feed(url, headers, timeout):
     try:
         resp = requests.get(url, headers=headers, timeout=timeout)
@@ -211,16 +220,43 @@ def fetch_recent(cfg):
     connect_timeout = max(1.0, min(connect_timeout, read_timeout))
     timeout = (connect_timeout, read_timeout)
 
-    query = build_search_query(cfg)
-    try:
-        days_back = int(arxiv_cfg.get("days_back", 1))
-    except (TypeError, ValueError):
-        days_back = 1
     now = dt.datetime.now(dt.timezone.utc)
-    since = now - dt.timedelta(days=days_back)
+    raw_days_back = arxiv_cfg.get("days_back", 1)
+    try:
+        days_back = float(raw_days_back)
+    except (TypeError, ValueError):
+        days_back = 1.0
+    lookback_days = max(1, int(math.ceil(days_back)))
+    range_start = (now - dt.timedelta(days=lookback_days)).replace(hour=0, minute=0, second=0, microsecond=0)
+
+    raw_days_forward = arxiv_cfg.get("days_forward", 0)
+    try:
+        days_forward = float(raw_days_forward)
+    except (TypeError, ValueError):
+        days_forward = 0.0
+    range_end = (now + dt.timedelta(days=max(0.0, days_forward))).replace(
+        hour=23, minute=59, second=59, microsecond=0
+    )
+    if range_end <= range_start:
+        range_end = range_start + dt.timedelta(days=1, hours=12)
+
+    fmt_start = _format_submitted_date(range_start)
+    fmt_end = _format_submitted_date(range_end)
+    print(
+        f"[arxiv bot] submittedDate window: {range_start:%Y-%m-%d %H:%M}Z -> "
+        f"{range_end:%Y-%m-%d %H:%M}Z"
+    )
+
+    cat_query = build_search_query(cfg)
+    date_clause = f"submittedDate:[{fmt_start} TO {fmt_end}]"
+    if cat_query:
+        query = f"({cat_query}) AND {date_clause}"
+    else:
+        query = date_clause
+    since = range_start
 
     base = "https://export.arxiv.org/api/query"
-    encoded_query = urllib.parse.quote(query, safe="+:()")
+    encoded_query = urllib.parse.quote(query, safe="+:()[]")
     headers = {"User-Agent": "arxiv-digest-bot/1.0 (mailto:ajd96@proton.me)"}
 
     aggregated_entries = []
