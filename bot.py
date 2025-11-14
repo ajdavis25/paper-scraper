@@ -1,4 +1,4 @@
-import re, os, yaml, feedparser, requests, copy, time, tempfile, datetime as dt, argparse
+import re, os, yaml, feedparser, requests, copy, time, tempfile, datetime as dt, argparse, gzip
 from flask import json
 import json as pyjson  # stdlib json for caching
 from filters import score_paper, match_category
@@ -138,65 +138,125 @@ def build_search_query(cfg):
     return cat_query
 
 
+def _download_arxiv_feed(url, headers, timeout):
+    try:
+        resp = requests.get(url, headers=headers, timeout=timeout)
+        resp.raise_for_status()
+    except Exception as e:
+        print(f"error: could not fetch from arXiv: {e}")
+        raise
+
+    content = resp.content
+    if resp.headers.get("Content-Encoding") == "gzip":
+        try:
+            content = gzip.decompress(content)
+            data = content.decode("utf-8", errors="ignore")
+            print("[arxiv bot] decompressed gzip response")
+        except Exception:
+            data = resp.text
+    else:
+        data = resp.text
+
+    if "Rate exceeded" in data:
+        raise RuntimeError("Rate exceeded")
+
+    if "<entry>" not in data:
+        print("[arxiv bot] warning: no <entry> tags in feed XML!")
+        print(data[:500])
+    return data
+
+
 def fetch_recent(cfg):
     import urllib.parse
-    import gzip
-    import time
 
-    max_results = cfg["arxiv"].get("max_results", 50)
+    arxiv_cfg = cfg.get("arxiv", {})
+    max_results = arxiv_cfg.get("max_results", 50)
+    try:
+        max_results = int(max_results)
+    except (TypeError, ValueError):
+        max_results = 50
+    if max_results <= 0:
+        max_results = 50
+
+    raw_chunk_size = arxiv_cfg.get("chunk_size") or arxiv_cfg.get("request_chunk_size")
+    default_chunk = min(50, max_results)
+    try:
+        chunk_size = int(raw_chunk_size) if raw_chunk_size is not None else default_chunk
+    except (TypeError, ValueError):
+        chunk_size = default_chunk
+    if chunk_size <= 0:
+        chunk_size = default_chunk
+    chunk_size = min(chunk_size, max_results)
+
+    chunk_delay = arxiv_cfg.get("chunk_delay")
+    if chunk_delay is None:
+        chunk_delay = _MIN_INTERVAL if chunk_size < max_results else 0.0
+    try:
+        chunk_delay = float(chunk_delay)
+    except (TypeError, ValueError):
+        chunk_delay = _MIN_INTERVAL if chunk_size < max_results else 0.0
+    chunk_delay = max(0.0, chunk_delay)
+
+    read_timeout = arxiv_cfg.get("read_timeout") or arxiv_cfg.get("request_timeout") or 45.0
+    connect_timeout = arxiv_cfg.get("connect_timeout") or arxiv_cfg.get("timeout_connect") or 8.0
+    try:
+        read_timeout = float(read_timeout)
+    except (TypeError, ValueError):
+        read_timeout = 45.0
+    try:
+        connect_timeout = float(connect_timeout)
+    except (TypeError, ValueError):
+        connect_timeout = 8.0
+    read_timeout = max(5.0, read_timeout)
+    connect_timeout = max(1.0, min(connect_timeout, read_timeout))
+    timeout = (connect_timeout, read_timeout)
+
     query = build_search_query(cfg)
-    days_back = cfg["arxiv"].get("days_back", 1)
+    try:
+        days_back = int(arxiv_cfg.get("days_back", 1))
+    except (TypeError, ValueError):
+        days_back = 1
     now = dt.datetime.now(dt.timezone.utc)
     since = now - dt.timedelta(days=days_back)
 
     base = "https://export.arxiv.org/api/query"
     encoded_query = urllib.parse.quote(query, safe="+:()")
-    params = {
-        "search_query": encoded_query,
-        "sortBy": "submittedDate",
-        "sortOrder": "descending",
-        "max_results": str(max_results),
-        "start": "0",
-    }
-    url = base + "?" + "&".join(f"{k}={v}" for k, v in params.items())
-    print(f"[arxiv bot] query URL: {url}")
-
     headers = {"User-Agent": "arxiv-digest-bot/1.0 (mailto:ajd96@proton.me)"}
 
-    try:
-        resp = requests.get(url, headers=headers, timeout=20)
-        resp.raise_for_status()
-
-        # only decompress if truly gzipped
-        content = resp.content
-        if resp.headers.get("Content-Encoding") == "gzip":
-            try:
-                content = gzip.decompress(content)
-                data = content.decode("utf-8", errors="ignore")
-                print("[arxiv bot] decompressed gzip response")
-            except Exception:
-                data = resp.text
+    aggregated_entries = []
+    chunk_index = 0
+    for start in range(0, max_results, chunk_size):
+        page_size = min(chunk_size, max_results - start)
+        url = (
+            f"{base}?search_query={encoded_query}&sortBy=submittedDate&sortOrder=descending"
+            f"&max_results={page_size}&start={start}"
+        )
+        if chunk_index == 0:
+            print(
+                f"[arxiv bot] query URL: {url} (chunk_size={page_size}, timeout={timeout[1]:.0f}s)"
+            )
         else:
-            data = resp.text
+            print(f"[arxiv bot] chunk {chunk_index + 1}: start={start}, size={page_size}")
 
-        # detect arXiv throttle
-        if "Rate exceeded" in data:
-            raise RuntimeError("Rate exceeded")
+        data = _download_arxiv_feed(url, headers, timeout)
+        feed = feedparser.parse(data)
+        print(
+            f"[arxiv bot] feedparser found {len(feed.entries)} entries (chunk {chunk_index + 1})"
+        )
+        aggregated_entries.extend(feed.entries)
+        chunk_index += 1
 
-        if "<entry>" not in data:
-            print("[arxiv bot] warning: no <entry> tags in feed XML!")
-            print(data[:500])
-    except Exception as e:
-        print(f"error: could not fetch from arXiv: {e}")
-        raise
+        if len(feed.entries) < page_size:
+            break
+        if start + page_size >= max_results:
+            break
+        if chunk_size < max_results and chunk_delay > 0:
+            time.sleep(chunk_delay)
 
-    feed = feedparser.parse(data)
-    print(f"[arxiv bot] feedparser found {len(feed.entries)} entries")
     results = []
-    raw_results = []
-    newest_pub = None
+    seen_ids = set()
 
-    for entry in feed.entries:
+    for entry in aggregated_entries:
         # choose updated date if available (more accurate for new versions)
         try:
             if getattr(entry, "updated_parsed", None):
@@ -209,6 +269,10 @@ def fetch_recent(cfg):
         entry_id = getattr(entry, "id", "")
         m = _ARXIV_ID_RE.search(entry_id) or _ARXIV_ID_RE.search(getattr(entry, "link", ""))
         arxiv_id = (m.group(1) + (m.group(2) or "")) if m else ""
+        if arxiv_id and arxiv_id in seen_ids:
+            continue
+        if arxiv_id:
+            seen_ids.add(arxiv_id)
 
         summary_text = decode_unicode_escapes(entry.summary.strip())
         summary_text = wrap_inline_tex(summary_text)
@@ -236,10 +300,6 @@ def fetch_recent(cfg):
             "primary_category": primary_category,
         }
 
-        raw_results.append(record)
-        if newest_pub is None or (pub and pub > newest_pub):
-            newest_pub = pub
-
         if pub >= since:
             results.append(record)
 
@@ -249,7 +309,9 @@ def fetch_recent(cfg):
             f"{days_back}-day window ending {since.date()} - returning zero results."
         )
 
-    print(f"[arxiv bot] fetched {len(results)} papers (newer than {since.date()}, max {max_results})")
+    print(
+        f"[arxiv bot] fetched {len(results)} papers (newer than {since.date()}, max {max_results})"
+    )
     return results
 
 
