@@ -190,41 +190,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
   // ===============================
-  // feedback table loader
-  // ===============================
-  const feedbackTable = document.getElementById("feedback-table");
-  if (feedbackTable) {
-    console.log("[feedback] loading entries...");
-    fetch("/feedback", { headers: { "accept": "application/json" } })
-      .then((r) => r.json())
-      .then((data) => {
-        const body = feedbackTable.querySelector("tbody");
-        if (!data.length) {
-          body.innerHTML = "<tr><td colspan='5'><em>no feedback found.</em></td></tr>";
-          return;
-        }
-
-        body.innerHTML = data
-          .map(
-            (f) => `
-          <tr>
-            <td>${f.email}</td>
-            <td><a href="${f.arxiv_id}" target="_blank">${f.arxiv_id}</a></td>
-            <td>${f.liked}</td>
-            <td>${f.timestamp}</td>
-            <td>${f.source || ""}</td>
-          </tr>`
-          )
-          .join("");
-      })
-      .catch((err) => {
-        console.error("[feedback] failed to load:", err);
-        feedbackTable.outerHTML = "<p><em>no feedback found.</em></p>";
-      });
-  }
-
-
-  // ===============================
   // navbar dashboard link handler
   // ===============================
   const dashLink = document.querySelector("#dashboard-link");
