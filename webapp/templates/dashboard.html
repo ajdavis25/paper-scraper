@@ -1,24 +1,33 @@
-{% extends "base.html" %} {% block title %}dashboard — arXiv digest{% endblock
-%} {% block content %}
-<h2>liked papers for {{ user.email or 'unknown' }}</h2>
+{% extends "base.html" %}
+{% block title %}dashboard - arXiv digest{% endblock %}
+{% block content %}
+<section class="page-card liked-section">
+  <h2>liked papers for {{ user.email or 'unknown' }}</h2>
 
-{% if not user.email %}
-<p style="margin-bottom: 1em">
-  <a class="btn" href="/subscribe">subscribe</a>
-  <a class="btn btn-secondary" href="/unsubscribe">unsubscribe</a>
-</p>
-{% endif %} {% if message %}
-<p><em>{{ message }}</em></p>
-{% endif %} {% if prefs %}
-<ul class="paper-list">
-  {% for p in prefs %}
-  <li>
-    <a href="{{ p.paper.link }}" target="_blank"
-      >{{ p.display_title or p.paper.title or ('arXiv:' ~ p.paper.arxiv_id)
-      }}</a
-    >
-    <small>({{ p.paper.arxiv_id }}, {{ p.timestamp }})</small>
-  </li>
-  {% endfor %}
-</ul>
-{% else %} {% endif %} {% endblock %}
+  {% if not user.email %}
+  <p class="cta-links">
+    <a class="btn" href="/subscribe">subscribe</a>
+    <a class="btn btn-secondary" href="/unsubscribe">unsubscribe</a>
+  </p>
+  {% endif %}
+
+  {% if message %}
+  <p><em>{{ message }}</em></p>
+  {% endif %}
+
+  {% if prefs %}
+  <ul class="paper-list liked-list">
+    {% for p in prefs %}
+    <li>
+      <a href="{{ p.paper.link }}" target="_blank">
+        {{ p.display_title or p.paper.title or ('arXiv:' ~ p.paper.arxiv_id) }}
+      </a>
+      <small>({{ p.paper.arxiv_id }}, {{ p.timestamp }})</small>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p>no saved likes yet.</p>
+  {% endif %}
+</section>
+{% endblock %}

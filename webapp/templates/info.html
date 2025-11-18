@@ -1,6 +1,6 @@
 {% extends "base.html" %} {% block title %}info{% endblock %} {% block content
 %}
-<section class="info-page">
+<section class="info-page page-card">
   <h2>what is arXiv digest?</h2>
   <p>
     arXiv digest helps you track new arXiv papers that match the topics you care
@@ -14,10 +14,16 @@
     {% for item in sample_digest %}
     <li>
       <strong>{{ item.title }}</strong>
-      <small>({{ item.category }})</small>
-      {% if item.score is defined %}
-      <span class="score">score {{ "%.1f"|format(item.score) }}</span>
-      {% endif %} &mdash; {{ item.summary }}
+      <div class="meta">
+        <small>
+          ({{ item.category }}) {% if item.score is defined %} (score {{
+          "%.1f"|format(item.score) }}){% endif %}
+        </small>
+      </div>
+      {% if item.authors %}
+      <p class="authors"><em>{{ item.authors }}</em></p>
+      {% endif %}
+      <p class="summary">{{ item.summary }}</p>
     </li>
     {% endfor %}
   </ul>

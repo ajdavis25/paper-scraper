@@ -70,6 +70,81 @@ main {
   margin: 0 auto;
 }
 
+.page-card {
+  background: #fff;
+  padding: 2rem 2.4rem;
+  border-radius: 14px;
+  border: 1px solid var(--astro-border);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+  margin: 2rem auto;
+}
+
+.page-card h2 {
+  color: var(--astro-red);
+  margin-top: 0;
+}
+
+.info-page {
+  max-width: 780px;
+}
+
+.info-page h3 {
+  margin-top: 2rem;
+  margin-bottom: 0.5rem;
+  color: var(--astro-red);
+}
+
+.sample-digest {
+  list-style: disc;
+  padding-left: 1.2rem;
+  margin: 1rem 0 2rem;
+}
+
+.sample-digest li {
+  margin-bottom: 1.6rem;
+  line-height: 1.5;
+}
+
+.sample-digest .meta small {
+  display: block;
+  color: var(--astro-muted);
+  font-size: 0.95rem;
+  margin-top: 0.1rem;
+}
+
+.sample-digest .authors {
+  margin: 0.4rem 0;
+  font-size: 0.95rem;
+  color: #333;
+}
+
+.sample-digest .summary {
+  margin: 0;
+  font-size: 0.98rem;
+  color: #222;
+}
+
+.liked-section {
+  max-width: 780px;
+}
+
+.liked-list {
+  list-style: none;
+  padding-left: 0;
+  margin: 1.5rem 0 0;
+}
+
+.liked-list li {
+  margin-bottom: 1.2rem;
+}
+
+.liked-list small {
+  display: block;
+  color: var(--astro-muted);
+  margin-top: 0.2rem;
+  font-size: 0.9rem;
+}
+
 /* button-style links (subscribe/unsubscribe/dashboard) */
 .view-btn {
   background-color: #444;
@@ -84,6 +159,10 @@ main {
 
 .view-btn:hover {
   background-color: #222;
+}
+
+.cta-links {
+  margin-bottom: 1.5rem;
 }
 
 .current-prefs {
@@ -137,12 +216,12 @@ ul.paper-list li {
 }
 
 ul.paper-list a {
-  color: var(--astro-link);
+  color: #0a49d1;
   font-weight: 600;
 }
 
 ul.paper-list a:hover {
-  color: var(--astro-hover);
+  color: #082f8f;
 }
 
 /* ========== FOOTER ========== */
@@ -157,11 +236,7 @@ footer {
 
 /* ========== PREFERENCES ========== */
 .prefs-container {
-  background: #fff;
-  padding: 2rem;
-  border-radius: 10px;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.08);
-  border: 1px solid #ddd;
+  max-width: 900px;
 }
 
 .prefs-form .form-group,
@@ -309,12 +384,7 @@ footer {
 /* ========= SUBSCRIBE SECTION ========== */
 section.subscribe-section,
 section.unsubscribe-section {
-  max-width: 600px;
-  margin: 2em auto;
-  padding: 1.5em;
-  border-radius: 12px;
-  background: #fafafa;
-  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.1);
+  max-width: 640px;
   text-align: center;
 }
 

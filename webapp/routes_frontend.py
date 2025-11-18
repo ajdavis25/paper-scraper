@@ -1072,18 +1072,21 @@ def info_page():
             "title": "probing dark matter substructure with lensed quasars",
             "category": "astro-ph.CO",
             "score": 3.0,
+            "authors": "author 1, author 2, author 3",
             "summary": "concise analysis of strong-lensing flux anomalies as subhalo probes.",
         },
         {
             "title": "machine-learning forecasts for gravitational-wave events",
             "category": "astro-ph.IM",
             "score": 4.0,
+            "authors": "author 1, author 2, author 3, author 4",
             "summary": "overview of a random-forest pipeline that predicts merger rates from detector telemetry.",
         },
         {
             "title": "turbulence-regulated star formation in molecular clouds",
             "category": "astro-ph.GA",
             "score": 2.0,
+            "authors": "author 1, author 2",
             "summary": "simulation-driven insight into how feedback preserves Larson-like scaling.",
         },
     ]
