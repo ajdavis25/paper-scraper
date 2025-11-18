@@ -14,9 +14,20 @@
     {% for item in sample_digest %}
     <li>
       <strong>{{ item.title }}</strong>
-      <small>({{ item.category }})</small> &mdash; {{ item.summary }}
+      <small>({{ item.category }})</small>
+      {% if item.score is defined %}
+      <span class="score">score {{ "%.1f"|format(item.score) }}</span>
+      {% endif %} &mdash; {{ item.summary }}
     </li>
     {% endfor %}
   </ul>
+
+  <h3>who built arXiv digest?</h3>
+  <p>
+    hello! i'm ashton davis, a masters student at university of texas at san
+    antonio who created arXiv digest to make it easier for anyone to keep up
+    with the latest papers. if you have feedback or want to collaborate, i'd
+    love to hear from you.
+  </p>
 </section>
 {% endblock %}
