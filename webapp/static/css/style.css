@@ -735,7 +735,7 @@ thead {
 .form-title {
   text-align: center;
   font-size: 1.75rem;
-  color: #700000;
+  color: var(--astro-red);
   margin-bottom: 1.5rem;
 }
 
@@ -752,17 +752,18 @@ input[type="password"] {
 .submit-btn {
   width: 100%;
   padding: 0.75rem;
-  background-color: #800000;
+  background-color: var(--astro-red);
   color: white;
   font-size: 1rem;
   border: none;
   border-radius: 6px;
   font-weight: bold;
   cursor: pointer;
+  transition: background 0.2s ease;
 }
 
 .submit-btn:hover {
-  background-color: #a00000;
+  background-color: var(--astro-hover);
 }
 
 .signup-text {
@@ -773,7 +774,7 @@ input[type="password"] {
 }
 
 .signup-text a {
-  color: #800000;
+  color: var(--astro-red);
   text-decoration: none;
   font-weight: 600;
 }
@@ -795,7 +796,7 @@ input[type="password"] {
   text-align: center;
   font-size: 1.6rem;
   font-weight: bold;
-  color: #7b0000;
+  color: var(--astro-red);
   margin-bottom: 1.5rem;
 }
 
@@ -820,7 +821,7 @@ input[type="password"] {
 }
 
 .submit-btn {
-  background-color: #7b0000;
+  background-color: var(--astro-red);
   color: white;
   border: none;
   padding: 0.75rem;
@@ -831,11 +832,11 @@ input[type="password"] {
 }
 
 .submit-btn:hover {
-  background-color: #600000;
+  background-color: var(--astro-hover);
 }
 
 a.forgot-password-link {
-  color: #7b0000;
+  color: var(--astro-red);
   font-size: 0.9rem;
   margin-top: 0.5rem;
   text-align: left;
@@ -844,7 +845,7 @@ a.forgot-password-link {
 
 a.forgot-password-link:hover {
   text-decoration: underline;
-  color: #600000;
+  color: var(--astro-hover);
 }
 
 input[type="email"],
