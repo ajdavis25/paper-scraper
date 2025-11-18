@@ -124,6 +124,70 @@ main {
   color: #222;
 }
 
+.recommendations-card {
+  max-width: 900px;
+}
+
+.recommendations-card .paper {
+  padding: 1.5rem 0;
+  border-bottom: 1px solid #eee;
+}
+
+.recommendations-card .paper:last-child {
+  border-bottom: none;
+}
+
+.recommendations-card .title {
+  color: #0a49d1;
+  text-decoration: underline;
+}
+
+.recommendations-card .title:hover {
+  color: #082f8f;
+}
+
+.feedback-card {
+  max-width: 900px;
+}
+
+.feedback-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 1rem;
+  font-size: 0.95rem;
+}
+
+.feedback-table th,
+.feedback-table td {
+  border: 1px solid var(--astro-border);
+  padding: 0.6rem 0.8rem;
+  text-align: left;
+}
+
+.feedback-table th {
+  background: #fafafa;
+  text-transform: uppercase;
+  font-size: 0.8rem;
+  letter-spacing: 0.05em;
+  color: var(--astro-muted);
+}
+
+.feedback-table a {
+  color: #0a49d1;
+}
+
+.feedback-table a:hover {
+  color: #082f8f;
+}
+
+.muted {
+  color: var(--astro-muted);
+}
+
+.text-center {
+  text-align: center;
+}
+
 .liked-section {
   max-width: 780px;
 }

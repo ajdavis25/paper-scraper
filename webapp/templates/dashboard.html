@@ -1,6 +1,5 @@
-{% extends "base.html" %}
-{% block title %}dashboard - arXiv digest{% endblock %}
-{% block content %}
+{% extends "base.html" %} {% block title %}dashboard - arXiv digest{% endblock
+%} {% block content %}
 <section class="page-card liked-section">
   <h2>liked papers for {{ user.email or 'unknown' }}</h2>
 
@@ -9,13 +8,9 @@
     <a class="btn" href="/subscribe">subscribe</a>
     <a class="btn btn-secondary" href="/unsubscribe">unsubscribe</a>
   </p>
-  {% endif %}
-
-  {% if message %}
+  {% endif %} {% if message %}
   <p><em>{{ message }}</em></p>
-  {% endif %}
-
-  {% if prefs %}
+  {% endif %} {% if prefs %}
   <ul class="paper-list liked-list">
     {% for p in prefs %}
     <li>

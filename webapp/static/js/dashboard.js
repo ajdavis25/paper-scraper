@@ -138,7 +138,7 @@ document.addEventListener("DOMContentLoaded", () => {
             });
           }
 
-          showMessage("loaded your saved preferences.", "info");
+          showMessage("loaded your saved preferences.", "success");
         }
       })
       .catch(() => console.log("no saved prefs found."));
