@@ -21,7 +21,10 @@ endblock %} {% block content %}
           <td>{{ entry.email }}</td>
           <td>
             {% if entry.arxiv_id %}
-            <a href="https://arxiv.org/abs/{{ entry.arxiv_id }}" target="_blank">
+            <a
+              href="https://arxiv.org/abs/{{ entry.arxiv_id }}"
+              target="_blank"
+            >
               {{ entry.arxiv_id }}
             </a>
             {% else %}
@@ -34,7 +37,9 @@ endblock %} {% block content %}
         </tr>
         {% else %}
         <tr>
-          <td colspan="5" class="muted text-center">no feedback entries yet.</td>
+          <td colspan="5" class="muted text-center">
+            no feedback entries yet.
+          </td>
         </tr>
         {% endfor %}
       </tbody>
