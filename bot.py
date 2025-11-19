@@ -1,9 +1,12 @@
 import re, os, yaml, feedparser, requests, copy, time, tempfile, datetime as dt, argparse, gzip, math
 from flask import json
+from markupsafe import Markup
 import json as pyjson  # stdlib json for caching
-from filters import score_paper, match_category
+from filters import score_paper, match_category, _normalize as _normalize_pref_term
 from mailer import send_email
 from curator import merge_preferences
+from sqlalchemy import func
+from shared.db import db
 from shared.utils import (
     wrap_inline_tex,
     render_inline_math_html,
@@ -23,6 +26,75 @@ _CACHE_MIN_ITEMS = 10
 
 _LAST_FETCH = 0
 _MIN_INTERVAL = 3.0  # seconds between requests
+_FEEDBACK_KEYWORD_WEIGHT = 0.3
+_FEEDBACK_AUTHOR_WEIGHT = 0.5
+_FLASK_APP = None
+
+
+def _get_flask_app():
+    global _FLASK_APP
+    if _FLASK_APP is False:
+        return None
+    if _FLASK_APP is None:
+        try:
+            from webapp import create_app
+
+            _FLASK_APP = create_app()
+        except Exception as exc:
+            print(f"[arxiv bot] unable to init flask app: {exc}")
+            _FLASK_APP = False
+    return _FLASK_APP or None
+
+
+def _empty_feedback_weights():
+    return {"keywords": {}, "authors": {}}
+
+
+def _compute_feedback_weights(user, RecommendationSnapshot):
+    """build keyword/author weight maps from prior feedback."""
+    weights = _empty_feedback_weights()
+    if not user:
+        return weights
+
+    snapshots = RecommendationSnapshot.query.filter(
+        RecommendationSnapshot.user_id == user.id,
+        RecommendationSnapshot.feedback.isnot(None),
+    ).all()
+
+    for snap in snapshots:
+        delta = 1.0 if snap.feedback else -1.0
+        for keyword in snap.matched_keywords or []:
+            normalized = _normalize_pref_term(keyword)
+            if not normalized:
+                continue
+            weights["keywords"][normalized] = (
+                weights["keywords"].get(normalized, 0.0) + delta
+            )
+        for author in snap.matched_authors or []:
+            normalized = _normalize_pref_term(author)
+            if not normalized:
+                continue
+            weights["authors"][normalized] = (
+                weights["authors"].get(normalized, 0.0) + delta
+            )
+    return weights
+
+
+def _feedback_adjustment(details, keyword_bias, author_bias):
+    bonus = 0.0
+    matched_keywords = details.get("matched_any_keywords") or []
+    matched_authors = details.get("matched_authors") or []
+    for keyword in matched_keywords:
+        normalized = _normalize_pref_term(keyword)
+        if not normalized:
+            continue
+        bonus += keyword_bias.get(normalized, 0.0) * _FEEDBACK_KEYWORD_WEIGHT
+    for author in matched_authors:
+        normalized = _normalize_pref_term(author)
+        if not normalized:
+            continue
+        bonus += author_bias.get(normalized, 0.0) * _FEEDBACK_AUTHOR_WEIGHT
+    return bonus
 
 
 def canon_abs_url(paper):
@@ -467,16 +539,14 @@ def _validate_cache_payload(payload, max_age, min_items):
 def load_db_recipients(fallback_prefs):
     """fetch recipient preference profiles from the database, if available."""
     try:
-        from webapp import create_app
-        from webapp.models import User, Subscriber, PreferenceConfig
+        from webapp.models import User, Subscriber, PreferenceConfig, RecommendationSnapshot
         from sqlalchemy.orm import joinedload
     except Exception as exc:
         print(f"[arxiv bot] skipping db preferences (import error: {exc})")
         return {}
-    try:
-        app = create_app()
-    except Exception as exc:
-        print(f"[arxiv bot] skipping db preferences (app init error: {exc})")
+    app = _get_flask_app()
+    if not app:
+        print("[arxiv bot] skipping db preferences (flask app unavailable)")
         return {}
 
     profiles = {}
@@ -502,10 +572,12 @@ def load_db_recipients(fallback_prefs):
             else:
                 final_prefs = _standardize_preferences(default_prefs)
             final_categories = final_prefs.get("categories", [])
+            feedback_weights = _compute_feedback_weights(user, RecommendationSnapshot)
             profiles[normalized] = {
                 "prefs": final_prefs,
                 "categories": final_categories,
                 "send_to": send_to or normalized,
+                "feedback_weights": feedback_weights,
             }
 
         subscriber_rows = Subscriber.query.with_entities(Subscriber.email).all()
@@ -520,6 +592,7 @@ def load_db_recipients(fallback_prefs):
                 "prefs": fallback_clone,
                 "categories": fallback_clone["categories"],
                 "send_to": send_to or normalized,
+                "feedback_weights": _empty_feedback_weights(),
             }
 
     if profiles:
@@ -529,7 +602,61 @@ def load_db_recipients(fallback_prefs):
     return profiles
 
 
-def curate(results, prefs, allowed_categories, fallback_prefs=None, email=None):
+def record_recommendation_snapshots(user_email, papers):
+    """store the matched keyword/author context for later feedback learning."""
+    if not user_email or not papers:
+        return
+    app = _get_flask_app()
+    if not app:
+        return
+    try:
+        from webapp.models import User, RecommendationSnapshot
+    except Exception as exc:
+        print(f"[arxiv bot] unable to import snapshot models: {exc}")
+        return
+
+    normalized = _normalize_email(user_email)
+    if not normalized:
+        return
+
+    with app.app_context():
+        user = User.query.filter(func.lower(User.email) == normalized).first()
+        if not user:
+            return
+
+        for entry in papers:
+            arxiv_id = entry.get("arxiv_id") or (entry.get("url") or "").split("/")[-1]
+            if not arxiv_id:
+                continue
+            snapshot = RecommendationSnapshot.query.filter_by(
+                user_id=user.id, arxiv_id=arxiv_id
+            ).first()
+            if not snapshot:
+                snapshot = RecommendationSnapshot(user_id=user.id, arxiv_id=arxiv_id)
+                db.session.add(snapshot)
+            snapshot.title = entry.get("title") or ""
+            snapshot.link = entry.get("url") or entry.get("link") or ""
+            snapshot.score = entry.get("score")
+            details = entry.get("details") or {}
+            snapshot.matched_keywords = list(details.get("matched_any_keywords") or [])
+            snapshot.matched_authors = list(details.get("matched_authors") or [])
+            snapshot.details = details
+            snapshot.feedback = None
+        try:
+            db.session.commit()
+        except Exception as exc:
+            db.session.rollback()
+            print(f"[arxiv bot] failed to save recommendation snapshots: {exc}")
+
+
+def curate(
+    results,
+    prefs,
+    allowed_categories,
+    fallback_prefs=None,
+    email=None,
+    feedback_weights=None,
+):
     curated = []
 
     # handle preference fallback explicitly
@@ -541,6 +668,9 @@ def curate(results, prefs, allowed_categories, fallback_prefs=None, email=None):
 
     allowed = _dedupe_preserve_order(allowed_categories or [])
     min_score = prefs.get("min_score", 1.0)
+    weights = feedback_weights or _empty_feedback_weights()
+    keyword_bias = weights.get("keywords", {})
+    author_bias = weights.get("authors", {})
 
     for r in results:
         title = r.get("title", "")
@@ -561,6 +691,9 @@ def curate(results, prefs, allowed_categories, fallback_prefs=None, email=None):
         # scoring
         score, details = score_paper(title, summary, authors, prefs)
         print(f"[debug] paper '{title}' score={score} details={details}")
+        feedback_bonus = _feedback_adjustment(details, keyword_bias, author_bias)
+        details["feedback_bias"] = feedback_bonus
+        score += feedback_bonus
         if score < min_score:
             continue
 
@@ -624,6 +757,22 @@ def format_authors(authors, max_authors=5):
         return ", ".join(names)
 
 
+def _relevance_explanation(details):
+    if not details:
+        return ""
+    reasons = []
+    keywords = [kw for kw in details.get("matched_any_keywords") or [] if kw]
+    authors = [au for au in details.get("matched_authors") or [] if au]
+    if keywords:
+        reasons.append("keywords: " + ", ".join(keywords))
+    if authors:
+        reasons.append("authors: " + ", ".join(authors))
+    bias = details.get("feedback_bias")
+    if bias:
+        reasons.append(f"feedback boost {bias:+.1f}")
+    return "; ".join(reasons)
+
+
 def render_paper_entry_html(paper, user_email, track_base):
     """
     build one paper block (html) with personalized like/dislike links.
@@ -662,6 +811,9 @@ def render_paper_entry_html(paper, user_email, track_base):
         summary_wrapped = wrap_inline_tex(summary_text)
         summary_html, has_math = render_inline_math_html(summary_wrapped)
         parts.append(f"<p>{summary_html}</p>")
+        relevance = _relevance_explanation(paper.get("details"))
+        if relevance:
+            parts.append(f"<p class='why-this'>why this paper: {Markup.escape(relevance)}</p>")
 
     parts.append(
         f"<p><a href='{like_link}'>👍 like</a> | <a href='{dislike_link}'>👎 dislike</a></p>"
@@ -707,6 +859,9 @@ def render_paper_entry_text(paper, user_email, track_base):
         summary_wrapped = wrap_inline_tex(summary)
         summary_plain = inline_math_to_plain(summary_wrapped)
         lines.append(summary_plain)
+        relevance = _relevance_explanation(paper.get("details"))
+        if relevance:
+            lines.append(f"why this paper: {relevance}")
 
     lines.append(f"👍 like: {like_link}")
     lines.append(f"👎 dislike: {dislike_link}")
@@ -808,6 +963,7 @@ def main():
                 "prefs": clone,
                 "categories": clone["categories"],
                 "send_to": test_addr,
+                "feedback_weights": _empty_feedback_weights(),
             }
         recipient_profiles = {normalized: profile}
         email_cfg["to_addrs"] = [profile.get("send_to", test_addr)]
@@ -828,6 +984,7 @@ def main():
                 "prefs": fallback_clone,
                 "categories": fallback_clone["categories"],
                 "send_to": addr,
+                "feedback_weights": _empty_feedback_weights(),
             }
         if not recipient_profiles:
             print("[arxiv bot] no recipients found; aborting.")
@@ -870,6 +1027,7 @@ def main():
                 "prefs": clone,
                 "categories": clone["categories"],
                 "send_to": actual_email,
+                "feedback_weights": _empty_feedback_weights(),
             }
             recipient_profiles[key] = profile
         prefs = profile["prefs"]
@@ -880,7 +1038,14 @@ def main():
             allowed_categories = ["astro-ph"]
 
         print(f"[debug] prefs for", actual_email, json.dumps(prefs, indent=2))
-        curated = curate(papers, prefs, allowed_categories, fallback_prefs=fallback_prefs, email=actual_email)
+        curated = curate(
+            papers,
+            prefs,
+            allowed_categories,
+            fallback_prefs=fallback_prefs,
+            email=actual_email,
+            feedback_weights=profile.get("feedback_weights"),
+        )
         print(
             f"[arxiv bot] {actual_email}: curated {len(curated)} papers "
             f"(min_score {prefs.get('min_score', 1.0)}) within categories {allowed_categories}"
@@ -899,6 +1064,7 @@ def main():
         subject = f"{subject_prefix} {dt.date.today()} — {n} paper{'s' if n != 1 else ''}"
         print(f"[arxiv bot] {actual_email}: selected {n} papers (effective threshold={eff_thr})")
         text_body, html_body = make_email_body_for_recipient(actual_email, selected, track_base)
+        record_recommendation_snapshots(actual_email, selected)
         send_email(cfg, subject, text_body, html_body, to_override=[actual_email])
 
     print(f"[arxiv bot] processed {len(email_cfg['to_addrs'])} recipient(s).")

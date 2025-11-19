@@ -26,6 +26,7 @@ from webapp.models import (
     Subscriber,
     Feedback,
     PreferenceConfig,
+    RecommendationSnapshot,
 )
 from shared.utils import get_user_by_email
 from shared.mail import send_reset_email, get_serializer, send_email
@@ -944,6 +945,12 @@ def _record_recommendation_feedback(
             db.session.add(pref)
         else:
             pref.liked = liked
+
+        snapshot = RecommendationSnapshot.query.filter_by(
+            user_id=user.id, arxiv_id=arxiv_id
+        ).first()
+        if snapshot:
+            snapshot.feedback = liked
     else:
         print(
             f"[recommendation-feedback] no user account for {email}; skipping preference sync."

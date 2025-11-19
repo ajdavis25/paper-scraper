@@ -1,11 +1,12 @@
 {% extends "base.html" %} {% block title %}home — arXiv digest{% endblock %} {%
 block content %}
 <section>
-  <h2>welcome!</h2>
+  <h2 class="accent-text">welcome!</h2>
   <p>
-    the <strong>arXiv digest</strong> delivers a daily, curated selection of
-    papers from <a href="https://arxiv.org/" target="_blank">arXiv</a>, filtered
-    by relevance and sent every morning around 8 am cst.
+    the <strong class="accent-text">arXiv digest</strong> delivers a daily,
+    curated selection of papers from
+    <a href="https://arxiv.org/" target="_blank">arXiv</a>, filtered by
+    relevance and sent every morning around 8 am cst.
   </p>
   <div style="margin-top: 1.5em">
     {% if not current_user.is_authenticated or not nav_user_is_subscribed %}
@@ -18,7 +19,7 @@ block content %}
       dashboard
     </button>
   </div>
-  <h3>get started</h3>
+  <h3 class="accent-text">get started</h3>
   <ol>
     <li>
       <strong>subscribe or sign up:</strong> drop your email on the

@@ -151,6 +151,29 @@ class PreferenceConfig(db.Model):
         return config
 
 
+class RecommendationSnapshot(db.Model, TimestampMixin):
+    __tablename__ = "recommendation_snapshot"
+    __table_args__ = (
+        db.UniqueConstraint("user_id", "arxiv_id", name="uq_snapshot_user_paper"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("user.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    arxiv_id = db.Column(db.String(32), nullable=False, index=True)
+    title = db.Column(db.String(512))
+    link = db.Column(db.String(512))
+    score = db.Column(db.Float, nullable=True)
+    matched_keywords = db.Column(db.JSON, default=list)
+    matched_authors = db.Column(db.JSON, default=list)
+    details = db.Column(db.JSON, default=dict)
+    feedback = db.Column(db.Boolean, nullable=True)
+
+
 class GmailWatchState(db.Model, TimestampMixin):
     __tablename__ = "gmail_watch_state"
 

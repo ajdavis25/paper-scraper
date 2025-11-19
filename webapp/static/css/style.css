@@ -26,6 +26,10 @@ body {
   letter-spacing: 0.01em;
 }
 
+.accent-text {
+  color: var(--astro-red);
+}
+
 /* ========== HEADER ========== */
 header {
   background-color: #fff;
