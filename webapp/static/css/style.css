@@ -235,6 +235,26 @@ main {
   margin-top: 0;
 }
 
+.home-card {
+  max-width: 880px;
+}
+
+.home-card .cta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.85rem;
+  margin: 1.5rem 0 2rem;
+}
+
+.home-card ol {
+  padding-left: 1.2rem;
+  line-height: 1.6;
+}
+
+.home-card ol li {
+  margin-bottom: 0.85rem;
+}
+
 .info-page {
   max-width: 780px;
 }

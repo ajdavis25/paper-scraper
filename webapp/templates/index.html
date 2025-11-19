@@ -1,6 +1,6 @@
-{% extends "base.html" %} {% block title %}home — arXiv digest{% endblock %} {%
+{% extends "base.html" %} {% block title %}home - arXiv digest{% endblock %} {%
 block content %}
-<section>
+<section class="page-card home-card">
   <h2 class="accent-text">welcome!</h2>
   <p>
     the <strong class="accent-text">arXiv digest</strong> delivers a daily,
@@ -8,7 +8,8 @@ block content %}
     <a href="https://arxiv.org/" target="_blank">arXiv</a>, filtered by
     relevance and sent every morning around 8 am cst.
   </p>
-  <div style="margin-top: 1.5em">
+
+  <div class="cta-row">
     {% if not current_user.is_authenticated or not nav_user_is_subscribed %}
     <a class="btn" href="/subscribe">subscribe</a>
     {% endif %} {% if not current_user.is_authenticated or
@@ -25,6 +26,7 @@ block content %}
       dashboard
     </button>
   </div>
+
   <h3 class="accent-text">get started</h3>
   <p>
     prefer a guided walkthrough? the new
@@ -52,7 +54,7 @@ block content %}
     </li>
     <li>
       <strong>read the daily digest:</strong> every morning you'll get a curated
-      email of new papers — keep reacting to tune future picks.
+      email of new papers - keep reacting to tune future picks.
     </li>
   </ol>
 </section>
