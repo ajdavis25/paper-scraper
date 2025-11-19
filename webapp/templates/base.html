@@ -7,7 +7,7 @@
       name="description"
       content="daily digest — curated arXiv papers delivered fresh."
     />
-    <title>{% block title %}arxiv digest{% endblock %}</title>
+    <title>{% block title %}arXiv digest{% endblock %}</title>
     <link
       rel="stylesheet"
       href="{{ url_for('static', filename='css/style.css') }}"
@@ -44,8 +44,9 @@
       <nav>
         {% if not current_user.is_authenticated or not nav_user_is_subscribed %}
         <a href="/subscribe">subscribe</a>
-        {% endif %} {% if not current_user.is_authenticated or
-        nav_user_is_subscribed %}
+        {% endif %}
+        <a href="/onboarding">get started</a>
+        {% if not current_user.is_authenticated or nav_user_is_subscribed %}
         <a href="/unsubscribe">unsubscribe</a>
         {% endif %}
         <a href="/info">info</a>

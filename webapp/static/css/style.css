@@ -30,6 +30,151 @@ body {
   color: var(--astro-red);
 }
 
+/* onboarding wizard */
+.onboarding-card {
+  max-width: 840px;
+}
+
+.wizard-step {
+  margin-top: 1.5rem;
+  padding: 1.5rem;
+  border: 1px solid var(--astro-border);
+  border-radius: 10px;
+  background: #fff;
+}
+
+.interest-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+}
+
+.domain-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.domain-card {
+  border: 1px solid var(--astro-border);
+  border-radius: 12px;
+  padding: 0.9rem;
+  display: block;
+  cursor: pointer;
+}
+
+.domain-card input {
+  margin-right: 0.5rem;
+}
+
+.domain-card small {
+  display: block;
+  color: var(--astro-muted);
+  margin-top: 0.45rem;
+}
+
+.interest-chip {
+  border: 1px solid var(--astro-border);
+  border-radius: 12px;
+  padding: 0.8rem;
+  display: block;
+  cursor: pointer;
+}
+
+.interest-chip.interest-chip-hidden {
+  display: none !important;
+}
+
+.interest-chip input {
+  margin-right: 0.5rem;
+}
+
+.interest-chip small {
+  display: block;
+  color: var(--astro-muted);
+  margin-top: 0.35rem;
+}
+
+.form-grid {
+  display: grid;
+  gap: 1rem;
+}
+
+.form-grid textarea,
+.form-grid select {
+  width: 100%;
+  margin-top: 0.4rem;
+  border: 1px solid var(--astro-border);
+  border-radius: 8px;
+  padding: 0.6rem;
+  font-family: inherit;
+}
+
+.wizard-actions {
+  margin-top: 1.5rem;
+  display: flex;
+  gap: 1rem;
+}
+
+.preview-list {
+  margin-top: 1rem;
+  display: grid;
+  gap: 1rem;
+}
+
+.preview-card {
+  border: 1px solid var(--astro-border);
+  border-radius: 10px;
+  padding: 1rem;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.preview-card h4 {
+  margin: 0 0 0.4rem;
+  font-size: 1.05rem;
+}
+
+.preview-card h4 a {
+  color: #0a49d1;
+  text-decoration: underline;
+}
+
+.preview-card h4 a:hover {
+  color: #082f8f;
+}
+
+.preview-meta {
+  display: flex;
+  gap: 0.8rem;
+  font-size: 0.9rem;
+  color: var(--astro-muted);
+  margin-bottom: 0.5rem;
+}
+
+.preview-meta .category-tag {
+  background: #f0f4ff;
+  color: #223c72;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+}
+
+.preview-meta .score-tag {
+  background: #fff4e6;
+  color: #a64b00;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+}
+
+.preview-card .why-this {
+  font-size: 0.9rem;
+  color: var(--astro-muted);
+  margin-top: 0.5rem;
+}
+
 /* ========== HEADER ========== */
 header {
   background-color: #fff;

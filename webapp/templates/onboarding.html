@@ -1,0 +1,117 @@
+{% extends "base.html" %} {% block title %}onboarding{% endblock %} {% block
+content %}
+<section
+  class="page-card onboarding-card"
+  id="onboarding-root"
+  data-existing="{{ existing_prefs | tojson | safe }}"
+  data-domains="{{ domain_groups | tojson | safe }}"
+>
+  <h2 class="accent-text">personalize your digest</h2>
+  <p>
+    choose a few interests so we can tailor your first recommendations. you can
+    always tweak these later from your dashboard.
+  </p>
+
+  <div class="wizard-step" data-step="1">
+    <h3>step 1 &mdash; choose a domain</h3>
+    <div class="domain-grid">
+      {% for domain in domain_groups %}
+      <label class="domain-card">
+        <input
+          type="checkbox"
+          class="domain-option"
+          name="domains"
+          value="{{ domain.key }}"
+          data-categories="{{ domain.categories | join(',') }}"
+        />
+        <strong>{{ domain.label }}</strong>
+        <small>{{ domain.description }}</small>
+      </label>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="wizard-step" data-step="2" hidden>
+    <h3>step 2 &mdash; pick some interests</h3>
+    <p class="muted" id="interest-hint">
+      select a domain above to narrow this list or keep everything visible.
+    </p>
+    <div class="interest-grid">
+      {% for group in topic_groups %}
+      <label class="interest-chip">
+        <input
+          type="checkbox"
+          class="interest-option"
+          name="interests"
+          value="{{ group.keywords | join(',') }}"
+          data-keywords="{{ group.keywords | join(',') }}"
+          data-categories="{{ group.categories | join(',') }}"
+          data-domains="{{ group.domains | join(',') }}"
+        />
+        <span>{{ group.label }}</span>
+        <small>{{ group.keywords | join(", ") }}</small>
+      </label>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="wizard-step" data-step="3" hidden>
+    <h3>step 3 &mdash; fine tune</h3>
+    <div class="form-grid">
+      <label>
+        preferred categories
+        <select id="category-select" multiple>
+          {% for value, label in category_choices %}
+          <option value="{{ value }}">{{ label }}</option>
+          {% endfor %}
+        </select>
+        <small id="category-hint">hold ctrl/cmd to select multiple.</small>
+      </label>
+      <label>
+        auto keywords from your selections
+        <textarea
+          id="auto-keywords"
+          rows="3"
+          readonly
+          placeholder="keywords will appear here as you select interests"
+        ></textarea>
+      </label>
+      <label>
+        add extra keywords (optional)
+        <textarea
+          id="manual-keywords"
+          rows="3"
+          placeholder="comma separated keywords to append"
+        ></textarea>
+      </label>
+      <label>
+        excluded keywords (comma separated)
+        <textarea
+          id="custom-excluded"
+          rows="3"
+          placeholder="education, review"
+        ></textarea>
+      </label>
+    </div>
+  </div>
+
+  <div class="wizard-step" data-step="4" hidden>
+    <h3>step 4 &mdash; preview a sample digest</h3>
+    <p class="muted">
+      click preview to see a few papers that match your selections before
+      saving.
+    </p>
+    <button class="btn" id="preview-btn">refresh preview</button>
+    <div id="preview-message" class="muted"></div>
+    <div id="preview-results" class="preview-list"></div>
+  </div>
+
+  <div class="wizard-actions">
+    <button class="btn-secondary" id="wizard-back" disabled>back</button>
+    <button class="btn" id="wizard-next">next</button>
+    <button class="btn" id="wizard-save" hidden>save preferences</button>
+  </div>
+</section>
+{% endblock %} {% block scripts %}
+<script src="{{ url_for('static', filename='js/onboarding.js') }}"></script>
+{% endblock %}

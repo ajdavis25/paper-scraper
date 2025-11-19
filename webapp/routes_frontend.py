@@ -16,6 +16,7 @@ from itsdangerous import SignatureExpired, BadSignature
 from sqlalchemy import func
 from markupsafe import Markup
 import yaml, requests, os, xml.etree.ElementTree as ET
+from urllib.parse import quote_plus
 
 from shared.db import db
 from webapp.account_utils import ensure_user_stub
@@ -28,8 +29,9 @@ from webapp.models import (
     PreferenceConfig,
     RecommendationSnapshot,
 )
-from shared.utils import get_user_by_email
+from shared.utils import get_user_by_email, fetch_arxiv_feed, strip_html_tags
 from shared.mail import send_reset_email, get_serializer, send_email
+from filters import score_paper
 
 SUBCATEGORY_EXPANSIONS = {
     "astro-ph": [
@@ -210,6 +212,395 @@ SUBCATEGORY_EXPANSIONS = {
     "nucl-th": ["nucl-th"],
 }
 
+ONBOARDING_DOMAINS = [
+    {
+        "key": "physics",
+        "label": "physics",
+        "description": "astro, condensed matter, relativity, etc.",
+        "categories": [
+            "astro-ph",
+            "astro-ph.CO",
+            "astro-ph.GA",
+            "astro-ph.HE",
+            "astro-ph.IM",
+            "astro-ph.EP",
+            "astro-ph.SR",
+            "cond-mat",
+            "gr-qc",
+            "hep-th",
+            "hep-ph",
+            "hep-ex",
+            "hep-lat",
+        ],
+    },
+    {
+        "key": "mathematics",
+        "label": "mathematics",
+        "description": "analysis, geometry, algebra",
+        "categories": ["math"],
+    },
+    {
+        "key": "computer_science",
+        "label": "computer science",
+        "description": "AI, ML, vision, theory",
+        "categories": ["cs"],
+    },
+    {
+        "key": "quant_bio",
+        "label": "quantitative biology",
+        "description": "bioinformatics, genomics",
+        "categories": ["q-bio"],
+    },
+    {
+        "key": "quant_finance",
+        "label": "quantitative finance",
+        "description": "econ, finance models",
+        "categories": ["q-fin"],
+    },
+    {
+        "key": "statistics",
+        "label": "statistics",
+        "description": "methodology, applications",
+        "categories": ["stat"],
+    },
+    {
+        "key": "eess",
+        "label": "electrical engineering & systems",
+        "description": "signal processing, control",
+        "categories": ["eess"],
+    },
+    {
+        "key": "economics",
+        "label": "economics",
+        "description": "econ theory, metrics",
+        "categories": ["econ"],
+    },
+]
+
+ONBOARDING_TOPIC_SUGGESTIONS = [
+    {
+        "label": "event horizon telescope",
+        "keywords": ["black hole", "event horizon", "EHT", "VLBI"],
+        "categories": ["astro-ph.HE", "astro-ph.GA", "astro-ph.IM"],
+        "domains": ["physics"],
+    },
+    {
+        "label": "gravitational waves",
+        "keywords": ["gravitational waves", "LIGO", "LISA", "black hole binary"],
+        "categories": ["gr-qc", "astro-ph.HE"],
+        "domains": ["physics"],
+    },
+    {
+        "label": "galaxy evolution",
+        "keywords": ["galaxy", "star formation", "feedback", "turbulence"],
+        "categories": ["astro-ph.GA", "astro-ph.CO"],
+        "domains": ["physics"],
+    },
+    {
+        "label": "exoplanets",
+        "keywords": ["exoplanet", "transit", "debris disk", "habitable zone"],
+        "categories": ["astro-ph.EP", "astro-ph.SR"],
+        "domains": ["physics"],
+    },
+    {
+        "label": "cosmology",
+        "keywords": ["dark energy", "CMB", "BAO", "cosmic microwave background"],
+        "categories": ["astro-ph.CO", "gr-qc"],
+        "domains": ["physics"],
+    },
+    {
+        "label": "compact objects",
+        "keywords": ["pulsar", "neutron star", "tidal disruption", "accretion"],
+        "categories": ["astro-ph.HE", "astro-ph.GA"],
+        "domains": ["physics"],
+    },
+    {
+        "label": "condensed matter",
+        "keywords": ["condensed matter", "superconductivity", "strongly correlated"],
+        "categories": ["cond-mat", "cond-mat.supr-con", "cond-mat.str-el"],
+        "domains": ["physics"],
+    },
+    {
+        "label": "particle physics",
+        "keywords": ["particle physics", "LHC", "standard model"],
+        "categories": ["hep-ph", "hep-ex", "hep-th"],
+        "domains": ["physics"],
+    },
+    {
+        "label": "quantum information",
+        "keywords": ["quantum computing", "quantum information"],
+        "categories": ["quant-ph"],
+        "domains": ["physics", "computer_science"],
+    },
+    {
+        "label": "analysis & PDEs",
+        "keywords": ["analysis", "partial differential equations", "dynamics"],
+        "categories": ["math.AP", "math.CA", "math.DS"],
+        "domains": ["mathematics"],
+    },
+    {
+        "label": "geometry & topology",
+        "keywords": ["geometry", "topology"],
+        "categories": ["math.GT", "math.DG", "math.AT"],
+        "domains": ["mathematics"],
+    },
+    {
+        "label": "algebra & number theory",
+        "keywords": ["algebra", "number theory"],
+        "categories": ["math.NT", "math.AG", "math.GR"],
+        "domains": ["mathematics"],
+    },
+    {
+        "label": "machine learning",
+        "keywords": ["machine learning", "deep learning", "AI"],
+        "categories": ["cs.LG", "stat.ML"],
+        "domains": ["computer_science", "statistics"],
+    },
+    {
+        "label": "computer vision",
+        "keywords": ["computer vision", "image recognition"],
+        "categories": ["cs.CV"],
+        "domains": ["computer_science"],
+    },
+    {
+        "label": "algorithms & theory",
+        "keywords": ["algorithms", "complexity", "data structures"],
+        "categories": ["cs.DS", "cs.CC"],
+        "domains": ["computer_science"],
+    },
+    {
+        "label": "bioinformatics",
+        "keywords": ["genomics", "bioinformatics", "systems biology"],
+        "categories": ["q-bio.GN", "q-bio.BM"],
+        "domains": ["quant_bio"],
+    },
+    {
+        "label": "systems & control",
+        "keywords": ["control theory", "autonomous systems"],
+        "categories": ["eess.SY", "cs.SY"],
+        "domains": ["eess"],
+    },
+    {
+        "label": "signal processing",
+        "keywords": ["signal processing", "communications"],
+        "categories": ["eess.SP", "eess.AS"],
+        "domains": ["eess"],
+    },
+    {
+        "label": "economics",
+        "keywords": [
+            "economics",
+            "macroeconomics",
+            "policy",
+            "development economics",
+            "finance",
+        ],
+        "categories": ["econ.EM", "econ.GN", "q-fin.EC"],
+        "domains": ["economics", "quant_finance"],
+    },
+    {
+        "label": "econometrics",
+        "keywords": [
+            "econometrics",
+            "quantitative finance",
+            "risk management",
+            "trading",
+        ],
+        "categories": ["econ.EM", "q-fin.TR", "q-fin.RM"],
+        "domains": ["economics", "quant_finance", "statistics"],
+    },
+    {
+        "label": "financial markets",
+        "keywords": ["market microstructure", "asset pricing", "derivatives"],
+        "categories": ["q-fin.MF", "q-fin.PM"],
+        "domains": ["quant_finance"],
+    },
+]
+
+ONBOARDING_CATEGORY_CHOICES = [
+    ("astro-ph", "astro-ph (general)"),
+    ("astro-ph.CO", "cosmology & nongalactic astro-ph.CO"),
+    ("astro-ph.GA", "galaxies (astro-ph.GA)"),
+    ("astro-ph.HE", "high energy astrophysics"),
+    ("astro-ph.IM", "instrumentation / methods"),
+    ("astro-ph.SR", "stellar / solar physics"),
+    ("gr-qc", "general relativity (gr-qc)"),
+    ("hep-lat", "lattice hep (hep-lat)"),
+    ("cond-mat", "condensed matter"),
+    ("cond-mat.supr-con", "condensed matter: superconductivity"),
+    ("cond-mat.str-el", "condensed matter: strongly correlated"),
+    ("hep-ph", "high energy physics: phenomenology"),
+    ("hep-ex", "high energy physics: experiment"),
+    ("hep-th", "high energy physics: theory"),
+    ("quant-ph", "quantum physics"),
+    ("math", "mathematics (general)"),
+    ("math.AP", "analysis of PDEs"),
+    ("math.GT", "geometry and topology"),
+    ("math.NT", "number theory"),
+    ("cs.LG", "computer science: machine learning"),
+    ("cs.CV", "computer science: computer vision"),
+    ("cs.DS", "computer science: data structures"),
+    ("q-bio", "quantitative biology"),
+    ("eess.SP", "electrical engineering: signal processing"),
+    ("eess.SY", "electrical engineering: systems and control"),
+    ("econ.EM", "economics: econometrics"),
+    ("econ.GN", "economics: general"),
+    ("q-fin.TR", "quantitative finance: trading"),
+    ("q-fin.RM", "quantitative finance: risk management"),
+    ("q-fin.MF", "quantitative finance: mathematical finance"),
+    ("q-fin.PM", "quantitative finance: portfolio management"),
+    ("stat.ML", "statistics: machine learning"),
+]
+
+
+def _expand_categories(selected):
+    expanded = []
+    seen = set()
+    for cat_name in selected:
+        if not cat_name:
+            continue
+        key = cat_name.lower()
+        expansions = SUBCATEGORY_EXPANSIONS.get(key)
+        if expansions:
+            for sub in expansions:
+                sub_clean = sub.strip()
+                if sub_clean and sub_clean not in seen:
+                    expanded.append(sub_clean)
+                    seen.add(sub_clean)
+            continue
+        if cat_name not in seen:
+            expanded.append(cat_name)
+            seen.add(cat_name)
+    return expanded
+
+
+def _display_category(preference_cat, paper):
+    pref = (preference_cat or "").strip().lower()
+    paper_categories = paper.get("categories") or []
+    if pref:
+        matching = []
+        for term in paper_categories:
+            term_clean = (term or "").strip()
+            if not term_clean:
+                continue
+            term_lower = term_clean.lower()
+            if term_lower == pref or term_lower.startswith(f"{pref}."):
+                matching.append(term_clean)
+        if matching:
+            return max(matching, key=len)
+
+    primary = (paper.get("primary_category") or "").strip()
+    if primary:
+        return primary
+    if paper_categories:
+        return paper_categories[0]
+    return preference_cat or ""
+
+
+def _format_relevance(details):
+    if not details:
+        return ""
+    parts = []
+    matched_keywords = [kw for kw in (details.get("matched_any_keywords") or []) if kw]
+    if matched_keywords:
+        parts.append("keywords: " + ", ".join(matched_keywords))
+    matched_authors = [au for au in (details.get("matched_authors") or []) if au]
+    if matched_authors:
+        parts.append("authors: " + ", ".join(matched_authors))
+    bias = details.get("feedback_bias")
+    if bias:
+        parts.append(f"feedback boost {bias:+.1f}")
+    return "; ".join(parts)
+
+
+def _generate_recommendations_payload(prefs, *, limit=10):
+    keywords = [k.strip() for k in (prefs.get("keywords") or []) if k and k.strip()]
+    if not keywords:
+        return (
+            [],
+            [],
+            "no keywords found in preferences. add some to get recommendations.",
+        )
+
+    encoded_terms = [f'all:"{quote_plus(k)}"' for k in keywords if k]
+    if not encoded_terms:
+        return [], [], "no valid keywords provided."
+
+    selected_categories = [c.strip() for c in (prefs.get("categories") or []) if c]
+    if not selected_categories:
+        selected_categories = ["astro-ph"]
+    categories = _expand_categories(selected_categories) or ["astro-ph"]
+    min_score = prefs.get("min_score", 1.0) or 1.0
+
+    excluded_terms = [
+        term.strip()
+        for term in (prefs.get("excluded_keywords") or [])
+        if term and term.strip()
+    ]
+    excluded_terms_lower = [term.lower() for term in excluded_terms]
+    scoring_prefs = {
+        "any_keywords": keywords,
+        "all_keywords": [],
+        "exclude_keywords": excluded_terms,
+        "authors": [],
+    }
+
+    all_recs = []
+    for cat in categories:
+        cat = cat.strip()
+        if not cat:
+            continue
+        query = "+OR+".join(encoded_terms) + f"+AND+cat:{quote_plus(cat)}"
+        url = (
+            "https://export.arxiv.org/api/query?"
+            f"search_query={query}&start=0&max_results=25&sortBy=submittedDate&sortOrder=descending"
+        )
+        print(f"[recommendations] fetching from {cat}: {url}")
+        try:
+            recs = fetch_arxiv_feed(url)
+            for r in recs:
+                r["category"] = _display_category(cat, r)
+                r["summary_plain"] = strip_html_tags(r.get("summary", "") or "")
+            all_recs.extend(recs)
+        except Exception as e:
+            print(f"[recommendations] error fetching {cat}: {e}")
+
+    dedup = {}
+    for r in all_recs:
+        link = r.get("link") or r.get("id") or ""
+        if link and link not in dedup:
+            dedup[link] = r
+
+    scored = []
+    for r in dedup.values():
+        text = f"{r.get('title','')} {r.get('summary','')}".lower()
+        if excluded_terms_lower and any(term in text for term in excluded_terms_lower):
+            continue
+        score, details = score_paper(
+            r.get("title", ""),
+            r.get("summary", ""),
+            r.get("authors"),
+            scoring_prefs,
+        )
+        if score >= min_score:
+            r["score"] = score
+            r["details"] = details
+            scored.append(r)
+
+    scored.sort(key=lambda x: x.get("score", 0), reverse=True)
+    scored = scored[:limit]
+
+    display_labels = selected_categories or categories
+    if scored:
+        msg = (
+            f"showing {len(scored)} recent papers across {', '.join(display_labels)} "
+            f"with score >= {min_score}."
+        )
+    else:
+        msg = "no papers met your minimum relevance threshold."
+    return scored, display_labels, msg
+
+
 frontend = Blueprint("frontend", __name__)
 
 
@@ -373,6 +764,20 @@ def unsubscribe():
 @login_required
 def preferences_page():
     return render_template("preferences.html")
+
+
+@frontend.route("/onboarding")
+@login_required
+def onboarding_page():
+    config = PreferenceConfig.get_or_create_for_user(current_user)
+    prefs = config.as_dict() if config else {}
+    return render_template(
+        "onboarding.html",
+        domain_groups=ONBOARDING_DOMAINS,
+        topic_groups=ONBOARDING_TOPIC_SUGGESTIONS,
+        category_choices=ONBOARDING_CATEGORY_CHOICES,
+        existing_prefs=prefs,
+    )
 
 
 @frontend.route("/dashboard")
@@ -749,10 +1154,7 @@ def recommendations():
     capped at 10 total results and showing the category of origin.
     """
     from sqlalchemy.exc import SQLAlchemyError
-    from urllib.parse import quote_plus
-    from shared.utils import fetch_arxiv_feed
 
-    # load preferences
     try:
         config = PreferenceConfig.get_or_create_for_user(current_user)
         prefs = (
@@ -774,146 +1176,39 @@ def recommendations():
             "min_score": 1.0,
         }
 
-    keywords = prefs.get("keywords") or []
-    excluded_keywords = prefs.get("excluded_keywords") or []
-    raw_categories = prefs.get("categories") or ["astro-ph"]
-    selected_categories = [c.strip() for c in raw_categories if c and c.strip()]
-    if not selected_categories:
-        selected_categories = ["astro-ph"]
-
-    def _expand_categories(selected):
-        expanded = []
-        seen = set()
-        for cat_name in selected:
-            key = cat_name.lower()
-            expansions = SUBCATEGORY_EXPANSIONS.get(key)
-            if expansions:
-                for sub in expansions:
-                    sub_clean = sub.strip()
-                    if sub_clean and sub_clean not in seen:
-                        expanded.append(sub_clean)
-                        seen.add(sub_clean)
-                continue
-            if cat_name not in seen:
-                expanded.append(cat_name)
-                seen.add(cat_name)
-        return expanded
-
-    categories = _expand_categories(selected_categories) or ["astro-ph"]
-    min_score = prefs.get("min_score", 1.0) or 1.0
-
-    if not keywords:
-        return render_template(
-            "recommendations.html",
-            recs=[],
-            message="no keywords found in preferences. add some in your dashboard first!",
-        )
-
-    # build encoded keywords for search
-    keyword_terms = [k.strip() for k in keywords if k and k.strip()]
-    encoded_terms = [f'all:"{quote_plus(k)}"' for k in keyword_terms]
-    if not encoded_terms:
-        return render_template(
-            "recommendations.html", recs=[], message="no valid keywords provided."
-        )
-
-    keyword_terms_lower = [k.lower() for k in keyword_terms]
-    excluded_terms_lower = [
-        term.strip().lower() for term in excluded_keywords if term and term.strip()
-    ]
-
-    def _display_category(preference_cat, paper):
-        """
-        prefer the most specific arXiv category that matches the user's
-        requested category (e.g., astro-ph.CO over astro-ph).
-        """
-        pref = (preference_cat or "").strip().lower()
-        paper_categories = paper.get("categories") or []
-        if pref:
-            matching = []
-            for term in paper_categories:
-                term_clean = (term or "").strip()
-                if not term_clean:
-                    continue
-                term_lower = term_clean.lower()
-                if term_lower == pref or term_lower.startswith(f"{pref}."):
-                    matching.append(term_clean)
-            if matching:
-                # longer strings have the subcategory suffix (astro-ph.CO)
-                return max(matching, key=len)
-
-        primary = (paper.get("primary_category") or "").strip()
-        if primary:
-            return primary
-        if paper_categories:
-            return paper_categories[0]
-        return preference_cat or ""
-
-    all_recs = []
-    for cat in categories:
-        cat = cat.strip()
-        if not cat:
-            continue
-
-        query = "+OR+".join(encoded_terms) + f"+AND+cat:{quote_plus(cat)}"
-        url = (
-            "https://export.arxiv.org/api/query?"
-            f"search_query={query}&start=0&max_results=25&sortBy=submittedDate&sortOrder=descending"
-        )
-        print(f"[recommendations] fetching from {cat}: {url}")
-
-        try:
-            recs = fetch_arxiv_feed(url)
-            # tag category
-            for r in recs:
-                r["category"] = _display_category(cat, r)
-            all_recs.extend(recs)
-        except Exception as e:
-            print(f"[recommendations] error fetching {cat}: {e}")
-
-    # dedup by link
-    dedup = {}
-    for r in all_recs:
-        link = r.get("link") or ""
-        if link and link not in dedup:
-            dedup[link] = r
-
-    # scoring
-    def relevance_score(text):
-        score = 0
-        for kw in keyword_terms_lower:
-            if kw and kw in text:
-                score += 1
-        return score
-
-    scored = []
-    for r in dedup.values():
-        text = f"{r.get('title','')} {r.get('summary','')}".lower()
-        if excluded_terms_lower and any(term in text for term in excluded_terms_lower):
-            continue
-        s = relevance_score(text)
-        if s >= min_score:
-            r["score"] = s
-            scored.append(r)
-
-    # sort by score and take only top 10 total
-    scored.sort(key=lambda x: x.get("score", 0), reverse=True)
-    scored = scored[:10]
-
+    scored, display_labels, msg = _generate_recommendations_payload(prefs, limit=10)
     for rec in scored:
         summary_text = rec.get("summary", "") or ""
         escaped = Markup.escape(summary_text)
         rec["summary_html"] = escaped.replace("\n", Markup("<br>"))
 
-    display_labels = selected_categories or categories
-    msg = (
-        f"showing {len(scored)} recent papers across {', '.join(display_labels)} "
-        f"with score >= {min_score}."
-        if scored
-        else "no papers met your minimum relevance threshold."
-    )
-
     return render_template("recommendations.html", recs=scored, message=msg)
+
+
+@frontend.route("/api/onboarding-preview", methods=["POST"])
+@login_required
+def onboarding_preview():
+    """return a short preview list for the onboarding wizard."""
+    data = request.get_json(force=True) or {}
+    prefs = {
+        "keywords": data.get("keywords") or [],
+        "excluded_keywords": data.get("excluded_keywords") or [],
+        "categories": data.get("categories") or [],
+        "min_score": data.get("min_score", 1.0) or 1.0,
+    }
+    records, _, message = _generate_recommendations_payload(prefs, limit=3)
+    preview = [
+        {
+            "title": r.get("title"),
+            "category": r.get("category"),
+            "score": r.get("score"),
+            "summary": r.get("summary_plain") or strip_html_tags(r.get("summary", "")),
+            "link": r.get("link") or r.get("id") or "",
+            "why": _format_relevance(r.get("details")),
+        }
+        for r in records
+    ]
+    return jsonify({"records": preview, "message": message})
 
 
 # record recommendation feedback (like/dislike)

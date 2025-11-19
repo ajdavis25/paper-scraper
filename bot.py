@@ -813,7 +813,7 @@ def render_paper_entry_html(paper, user_email, track_base):
         parts.append(f"<p>{summary_html}</p>")
         relevance = _relevance_explanation(paper.get("details"))
         if relevance:
-            parts.append(f"<p class='why-this'>why this paper: {Markup.escape(relevance)}</p>")
+            parts.append(f"<p class='why-this'>why this paper? {Markup.escape(relevance)}</p>")
 
     parts.append(
         f"<p><a href='{like_link}'>👍 like</a> | <a href='{dislike_link}'>👎 dislike</a></p>"
@@ -861,7 +861,7 @@ def render_paper_entry_text(paper, user_email, track_base):
         lines.append(summary_plain)
         relevance = _relevance_explanation(paper.get("details"))
         if relevance:
-            lines.append(f"why this paper: {relevance}")
+            lines.append(f"why this paper? {relevance}")
 
     lines.append(f"👍 like: {like_link}")
     lines.append(f"👎 dislike: {dislike_link}")
