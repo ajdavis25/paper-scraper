@@ -1524,7 +1524,7 @@ def admin_ops_dashboard():
         db.session.query(growth_day.label("day"), func.count(Subscriber.id).label("count"))
         .filter(Subscriber.created_at >= growth_window)
         .group_by(growth_day)
-        .order_by(growth_day)
+        .order_by(growth_day.desc())
         .all()
     )
     growth_series = [
@@ -1568,7 +1568,7 @@ def admin_ops_dashboard():
             Feedback.timestamp >= engagement_window,
         )
         .group_by(fb_day)
-        .order_by(fb_day)
+        .order_by(fb_day.desc())
         .all()
     )
     engagement_series = [
@@ -1605,7 +1605,7 @@ def admin_ops_dashboard():
             DeliveryEvent.status != "sent",
         )
         .group_by(failure_day)
-        .order_by(failure_day)
+        .order_by(failure_day.desc())
         .all()
     )
     failure_series = [
