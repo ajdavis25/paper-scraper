@@ -535,16 +535,29 @@ def latex_to_plain(expr: str) -> str:
             cmd = expr[i:j]
             bare_cmd = cmd.strip("\\")
 
-            if cmd in LATEX_SYMBOLS:
-                result.append(LATEX_SYMBOLS[cmd])
-                i = j
-                continue
             if bare_cmd in ACCENT_COMBINERS:
                 content, next_idx = _read_group(expr, j)
+                # allow fallback to a single token when braces are missing
+                if not content:
+                    fallback_start = j
+                    if fallback_start < length and expr[fallback_start] == "\\":
+                        k = fallback_start + 1
+                        while k < length and expr[k].isalpha():
+                            k += 1
+                        if k > fallback_start + 1:
+                            content = expr[fallback_start:k]
+                            next_idx = k
+                    if not content and fallback_start < length:
+                        content = expr[fallback_start]
+                        next_idx = fallback_start + 1
                 if content:
                     result.append(_apply_accent(bare_cmd, latex_to_plain(content)))
                     i = next_idx
                     continue
+            if cmd in LATEX_SYMBOLS:
+                result.append(LATEX_SYMBOLS[cmd])
+                i = j
+                continue
             if bare_cmd == "romannumeral":
                 idx = j
                 if idx < length and expr[idx] == "{":
