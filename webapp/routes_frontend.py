@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from datetime import datetime
 from flask import (
     Blueprint,
     render_template,
@@ -1213,7 +1214,11 @@ def onboarding_preview():
 
 # record recommendation feedback (like/dislike)
 def _record_recommendation_feedback(
-    email: str, arxiv_id: str, liked: bool, source: str = "recommendations"
+    email: str,
+    arxiv_id: str,
+    liked: bool,
+    source: str = "recommendations",
+    timestamp: datetime | None = None,
 ):
     """shared helper to store recommendation feedback."""
     email = (email or "").strip().lower()
@@ -1259,6 +1264,7 @@ def _record_recommendation_feedback(
         arxiv_id=arxiv_id,
         liked=liked,
         source=source,
+        timestamp=timestamp or datetime.utcnow(),
     )
     db.session.add(fb_entry)
     db.session.commit()
@@ -1336,8 +1342,37 @@ def view_feedback_page():
     if not current_user.is_admin:
         abort(403)
 
-    # pull from the canonical source of truth: UserPreference <=> Paper <=> User
+    # pull direct feedback entries so we preserve the original source label
     rows = (
+        Feedback.query.filter(Feedback.type == "recommendation")
+        .order_by(Feedback.timestamp.desc())
+        .limit(200)
+        .all()
+    )
+
+    feedback = []
+    seen_pairs = set()
+
+    def _add_entry(email, arxiv_id, liked, timestamp, source):
+        ts_dt = timestamp if isinstance(timestamp, datetime) else None
+        key = ((email or "").strip().lower(), (arxiv_id or "").strip())
+        seen_pairs.add(key)
+        feedback.append(
+            {
+                "email": email or "-",
+                "arxiv_id": arxiv_id,
+                "liked": bool(liked),
+                "timestamp": ts_dt.strftime("%Y-%m-%d %H:%M") if ts_dt else "-",
+                "timestamp_raw": ts_dt or datetime.min,
+                "source": source or "-",
+            }
+        )
+
+    for entry in rows:
+        _add_entry(entry.email, entry.arxiv_id, entry.liked, entry.timestamp, entry.source)
+
+    # fall back to canonical preference data so local dev databases still show rows
+    legacy_rows = (
         db.session.query(
             User.email.label("email"),
             Paper.arxiv_id.label("arxiv_id"),
@@ -1351,18 +1386,18 @@ def view_feedback_page():
         .all()
     )
 
-    feedback = [
-        {
-            "email": r.email,
-            "arxiv_id": r.arxiv_id,  # now a real id like "0812.0365v1"
-            "liked": bool(r.liked),  # True/False -> ✓/✗ in template
-            "timestamp": r.timestamp.strftime("%Y-%m-%d %H:%M"),
-            "source": "recommendations",
-        }
-        for r in rows
-    ]
+    for row in legacy_rows:
+        key = ((row.email or "").strip().lower(), (row.arxiv_id or "").strip())
+        if key in seen_pairs:
+            continue
+        _add_entry(row.email, row.arxiv_id, row.liked, row.timestamp, "recommendations")
+
+    feedback.sort(key=lambda entry: entry["timestamp_raw"], reverse=True)
+    for entry in feedback:
+        entry.pop("timestamp_raw", None)
 
     return render_template("feedback.html", feedback=feedback)
+
 
 
 # info page

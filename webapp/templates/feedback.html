@@ -4,39 +4,41 @@ endblock %} {% block content %}
   <h2>user feedback</h2>
   <p>recent likes and dislikes recorded by users.</p>
 
-  <table id="feedback-table" class="feedback-table">
-    <thead>
-      <tr>
-        <th>email</th>
-        <th>arXiv id</th>
-        <th>liked</th>
-        <th>timestamp</th>
-        <th>source</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for entry in feedback %}
-      <tr>
-        <td>{{ entry.email }}</td>
-        <td>
-          {% if entry.arxiv_id %}
-          <a href="https://arxiv.org/abs/{{ entry.arxiv_id }}" target="_blank">
-            {{ entry.arxiv_id }}
-          </a>
-          {% else %}
-          <span class="muted">-</span>
-          {% endif %}
-        </td>
-        <td>{{ 'yes' if entry.liked else 'no' }}</td>
-        <td>{{ entry.timestamp }}</td>
-        <td>{{ entry.source or '-' }}</td>
-      </tr>
-      {% else %}
-      <tr>
-        <td colspan="5" class="muted text-center">no feedback entries yet.</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+  <div class="feedback-table-wrapper">
+    <table id="feedback-table" class="feedback-table">
+      <thead>
+        <tr>
+          <th>email</th>
+          <th>arXiv id</th>
+          <th>liked</th>
+          <th>timestamp</th>
+          <th>source</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for entry in feedback %}
+        <tr>
+          <td>{{ entry.email }}</td>
+          <td>
+            {% if entry.arxiv_id %}
+            <a href="https://arxiv.org/abs/{{ entry.arxiv_id }}" target="_blank">
+              {{ entry.arxiv_id }}
+            </a>
+            {% else %}
+            <span class="muted">-</span>
+            {% endif %}
+          </td>
+          <td>{{ 'yes' if entry.liked else 'no' }}</td>
+          <td>{{ entry.timestamp }}</td>
+          <td>{{ entry.source or '-' }}</td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="5" class="muted text-center">no feedback entries yet.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
 </section>
 {% endblock %}

@@ -202,10 +202,12 @@ nav {
 }
 
 nav a {
+  display: inline-block;
   margin-right: 1.2rem;
   color: #a00;
   text-decoration: none;
   font-weight: 500;
+  white-space: nowrap;
 }
 
 nav a:hover {
@@ -299,11 +301,18 @@ main {
   max-width: 900px;
 }
 
+.feedback-table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+}
+
 .feedback-table {
   width: 100%;
+  min-width: 640px;
   border-collapse: collapse;
   margin-top: 1rem;
   font-size: 0.95rem;
+  table-layout: auto;
 }
 
 .feedback-table th,
@@ -311,6 +320,7 @@ main {
   border: 1px solid var(--astro-border);
   padding: 0.6rem 0.8rem;
   text-align: left;
+  white-space: nowrap;
 }
 
 .feedback-table th {

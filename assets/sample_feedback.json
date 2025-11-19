@@ -1,0 +1,51 @@
+[
+  {
+    "email": "ashton.davis3@my.utsa.edu",
+    "arxiv_id": "2203.00040v1",
+    "liked": false,
+    "timestamp": "2025-11-19 00:44",
+    "source": "recommendations"
+  },
+  {
+    "email": "ashton.davis3@my.utsa.edu",
+    "arxiv_id": "2410.06251v2",
+    "liked": true,
+    "timestamp": "2025-11-19 00:43",
+    "source": "recommendations"
+  },
+  {
+    "email": "xiaoya@nao.cas.cn",
+    "arxiv_id": "2511.10195v1",
+    "liked": true,
+    "timestamp": "2025-11-14 16:50",
+    "source": "recommendations"
+  },
+  {
+    "email": "carl.ziegler@sfasu.edu",
+    "arxiv_id": "2203.00040v1",
+    "liked": false,
+    "timestamp": "2025-11-13 14:42",
+    "source": "recommendations"
+  },
+  {
+    "email": "carl.ziegler@sfasu.edu",
+    "arxiv_id": "2312.02130v1",
+    "liked": true,
+    "timestamp": "2025-11-13 14:41",
+    "source": "recommendations"
+  },
+  {
+    "email": "collin.sunes@my.utsa.edu",
+    "arxiv_id": "2511.04428v1",
+    "liked": true,
+    "timestamp": "2025-11-09 13:22",
+    "source": "recommendations"
+  },
+  {
+    "email": "ashton.davis3@my.utsa.edu",
+    "arxiv_id": "2509.01001v1",
+    "liked": true,
+    "timestamp": "2025-11-05 11:00",
+    "source": "digest"
+  }
+]
