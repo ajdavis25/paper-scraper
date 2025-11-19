@@ -270,6 +270,21 @@ document.addEventListener("DOMContentLoaded", () => {
       `;
       previewList.appendChild(card);
     });
+
+    if (window.MathJax) {
+      const targets = [previewList];
+      if (typeof window.MathJax.typesetPromise === "function") {
+        window.MathJax.typesetPromise(targets).catch((err) =>
+          console.warn("[onboarding] MathJax typeset failed", err)
+        );
+      } else if (typeof window.MathJax.typeset === "function") {
+        try {
+          window.MathJax.typeset(targets);
+        } catch (err) {
+          console.warn("[onboarding] MathJax typeset failed", err);
+        }
+      }
+    }
   }
 
   nextBtn.addEventListener("click", () => {

@@ -76,8 +76,17 @@ def decode_unicode_escapes(text: str) -> str:
     convert literal \\uXXXX (and \\UXXXXXXXX) sequences into their unicode characters.
     arXiv sometimes double-escapes certain authors' math so we normalize it early.
     """
-    if not text or "\\u" not in text:
+    if not text or ("\\u" not in text and "\\U" not in text):
         return text
+
+    normalized = text
+    # collapse sequences like "\\\\uXXXX" -> "\\uXXXX" before replacement
+    # (repeat until stable to handle arbitrarily deep escaping).
+    while "\\\\u" in normalized or "\\\\U" in normalized:
+        updated = normalized.replace("\\\\u", "\\u").replace("\\\\U", "\\U")
+        if updated == normalized:
+            break
+        normalized = updated
 
     def _replace(match: re.Match[str]) -> str:
         small = match.group(1)
@@ -85,7 +94,7 @@ def decode_unicode_escapes(text: str) -> str:
         code = int(small or big, 16)
         return chr(code)
 
-    return _UNICODE_ESCAPE_RE.sub(_replace, text)
+    return _UNICODE_ESCAPE_RE.sub(_replace, normalized)
 
 
 def strip_html_tags(text: str) -> str:

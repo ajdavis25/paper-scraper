@@ -1,4 +1,4 @@
-{% extends "base.html" %} {% block title %}login{% endblock %} {% block content
+﻿{% extends "base.html" %} {% block title %}login{% endblock %} {% block content
 %}
 <div class="form-box">
   <h2 class="form-title">login</h2>
@@ -22,8 +22,14 @@
   </form>
 
   <p class="signup-text">
-    don’t have an account?
-    <a href="{{ url_for('frontend.signup') }}">sign up</a>
+    new to the digest?
+    <a href="{{ url_for('frontend.subscribe') }}"
+      >subscribe &amp; create an account</a
+    >
+  </p>
+  <p class="signup-text">
+    subscribed but never set a password?
+    <a href="{{ url_for('frontend.subscribe') }}">request a magic link</a>
   </p>
 </div>
 {% endblock %}

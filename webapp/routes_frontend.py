@@ -36,6 +36,8 @@ from shared.utils import get_user_by_email, fetch_arxiv_feed, strip_html_tags
 from shared.mail import send_reset_email, get_serializer, send_email
 from filters import score_paper
 
+CLAIM_TOKEN_MAX_AGE = 60 * 60 * 24 * 7  # 7 days to finish claiming stub accounts
+
 SUBCATEGORY_EXPANSIONS = {
     "astro-ph": [
         "astro-ph.CO",
@@ -282,56 +284,122 @@ ONBOARDING_DOMAINS = [
 
 ONBOARDING_TOPIC_SUGGESTIONS = [
     {
-        "label": "event horizon telescope",
-        "keywords": ["black hole", "event horizon", "EHT", "VLBI"],
-        "categories": ["astro-ph.HE", "astro-ph.GA", "astro-ph.IM"],
-        "domains": ["physics"],
-    },
-    {
-        "label": "gravitational waves",
-        "keywords": ["gravitational waves", "LIGO", "LISA", "black hole binary"],
-        "categories": ["gr-qc", "astro-ph.HE"],
-        "domains": ["physics"],
-    },
-    {
-        "label": "galaxy evolution",
-        "keywords": ["galaxy", "star formation", "feedback", "turbulence"],
-        "categories": ["astro-ph.GA", "astro-ph.CO"],
-        "domains": ["physics"],
-    },
-    {
-        "label": "exoplanets",
-        "keywords": ["exoplanet", "transit", "debris disk", "habitable zone"],
-        "categories": ["astro-ph.EP", "astro-ph.SR"],
-        "domains": ["physics"],
-    },
-    {
-        "label": "cosmology",
-        "keywords": ["dark energy", "CMB", "BAO", "cosmic microwave background"],
-        "categories": ["astro-ph.CO", "gr-qc"],
-        "domains": ["physics"],
-    },
-    {
-        "label": "compact objects",
-        "keywords": ["pulsar", "neutron star", "tidal disruption", "accretion"],
-        "categories": ["astro-ph.HE", "astro-ph.GA"],
+        "label": "astrophysics",
+        "keywords": ["astronomy", "galaxies", "cosmology", "stars", "exoplanets"],
+        "categories": [
+            "astro-ph",
+            "astro-ph.CO",
+            "astro-ph.EP",
+            "astro-ph.GA",
+            "astro-ph.HE",
+            "astro-ph.IM",
+            "astro-ph.SR",
+        ],
         "domains": ["physics"],
     },
     {
         "label": "condensed matter",
-        "keywords": ["condensed matter", "superconductivity", "strongly correlated"],
-        "categories": ["cond-mat", "cond-mat.supr-con", "cond-mat.str-el"],
+        "keywords": ["condensed matter", "superconductivity", "quantum materials"],
+        "categories": [
+            "cond-mat",
+            "cond-mat.dis-nn",
+            "cond-mat.mes-hall",
+            "cond-mat.mtrl-sci",
+            "cond-mat.other",
+            "cond-mat.quant-gas",
+            "cond-mat.soft",
+            "cond-mat.stat-mech",
+            "cond-mat.str-el",
+            "cond-mat.supr-con",
+        ],
         "domains": ["physics"],
     },
     {
-        "label": "particle physics",
-        "keywords": ["particle physics", "LHC", "standard model"],
-        "categories": ["hep-ph", "hep-ex", "hep-th"],
+        "label": "general relativity & quantum cosmology",
+        "keywords": ["relativity", "quantum gravity", "spacetime", "cosmology"],
+        "categories": ["gr-qc"],
         "domains": ["physics"],
     },
     {
-        "label": "quantum information",
-        "keywords": ["quantum computing", "quantum information"],
+        "label": "high energy physics - experiment",
+        "keywords": ["colliders", "detectors", "LHC", "accelerator physics"],
+        "categories": ["hep-ex"],
+        "domains": ["physics"],
+    },
+    {
+        "label": "high energy physics - lattice",
+        "keywords": ["lattice QCD", "numerical gauge theory", "discretization"],
+        "categories": ["hep-lat"],
+        "domains": ["physics"],
+    },
+    {
+        "label": "high energy physics - phenomenology",
+        "keywords": ["BSM", "flavor physics", "dark matter", "precision tests"],
+        "categories": ["hep-ph"],
+        "domains": ["physics"],
+    },
+    {
+        "label": "high energy physics - theory",
+        "keywords": ["quantum field theory", "string theory", "scattering amplitudes"],
+        "categories": ["hep-th"],
+        "domains": ["physics"],
+    },
+    {
+        "label": "mathematical physics",
+        "keywords": ["integrable systems", "spectral theory", "functional analysis"],
+        "categories": ["math-ph"],
+        "domains": ["physics"],
+    },
+    {
+        "label": "nonlinear sciences",
+        "keywords": ["chaos", "pattern formation", "self-organization", "solitons"],
+        "categories": ["nlin", "nlin.CD", "nlin.AO", "nlin.CG", "nlin.PS", "nlin.SI"],
+        "domains": ["physics"],
+    },
+    {
+        "label": "nuclear experiment",
+        "keywords": ["heavy ion collisions", "radioactive beams", "detectors"],
+        "categories": ["nucl-ex"],
+        "domains": ["physics"],
+    },
+    {
+        "label": "nuclear theory",
+        "keywords": ["nuclear structure", "few-body", "hadronic matter", "EFT"],
+        "categories": ["nucl-th"],
+        "domains": ["physics"],
+    },
+    {
+        "label": "physics (general)",
+        "keywords": ["applied physics", "fluids", "optics", "space physics"],
+        "categories": [
+            "physics",
+            "physics.acc-ph",
+            "physics.app-ph",
+            "physics.atm-clus",
+            "physics.atom-ph",
+            "physics.bio-ph",
+            "physics.chem-ph",
+            "physics.class-ph",
+            "physics.comp-ph",
+            "physics.data-an",
+            "physics.ed-ph",
+            "physics.flu-dyn",
+            "physics.gen-ph",
+            "physics.geo-ph",
+            "physics.hist-ph",
+            "physics.ins-det",
+            "physics.med-ph",
+            "physics.optics",
+            "physics.plasm-ph",
+            "physics.pop-ph",
+            "physics.soc-ph",
+            "physics.space-ph",
+        ],
+        "domains": ["physics"],
+    },
+    {
+        "label": "quantum physics",
+        "keywords": ["quantum information", "quantum optics", "entanglement", "qubits"],
         "categories": ["quant-ph"],
         "domains": ["physics", "computer_science"],
     },
@@ -647,11 +715,12 @@ def login():
                 return redirect(url_for("frontend.index"))
 
             if user and not user.password_hash:
+                _send_subscription_email(email, "claim")
                 flash(
-                    "looks like you subscribed via email earlier. set a password to finish account setup.",
+                    "looks like you subscribed via email earlier. we just sent a magic link to finish account setup.",
                     "info",
                 )
-                return redirect(url_for("frontend.signup"))
+                return redirect(url_for("frontend.login"))
 
             if not user:
                 subscriber = Subscriber.query.filter(
@@ -659,11 +728,12 @@ def login():
                 ).first()
                 if subscriber:
                     ensure_user_stub(email)
+                    _send_subscription_email(email, "claim")
                     flash(
-                        "looks like you subscribed via email earlier. set a password to finish account setup.",
+                        "looks like you subscribed via email earlier. check your email for a link to finish account setup.",
                         "info",
                     )
-                    return redirect(url_for("frontend.signup"))
+                    return redirect(url_for("frontend.login"))
 
             flash("invalid email or password.", "error")
             return redirect(url_for("frontend.login"))
@@ -684,11 +754,9 @@ def logout():
 @frontend.route("/subscribe", methods=["GET", "POST"])
 def subscribe():
     if request.method == "POST":
-        if request.is_json:
-            data = request.get_json(force=True)
-            email = data.get("email", "").strip().lower()
-        else:
-            email = request.form.get("email", "").strip().lower()
+        data = request.get_json(silent=True) or request.form
+        email = (data.get("email") or "").strip().lower()
+        password = (data.get("password") or "").strip()
 
         if not email:
             return (
@@ -697,18 +765,68 @@ def subscribe():
             )
 
         try:
-            existing = Subscriber.query.filter(
+            user = get_user_by_email(email)
+            if not user:
+                user, _ = ensure_user_stub(email, commit=False)
+
+            subscriber = Subscriber.query.filter(
                 func.lower(Subscriber.email) == email
             ).first()
-            if existing:
-                return jsonify({"status": "info", "message": "already subscribed!"})
+            already_subscribed = bool(subscriber)
+            if not already_subscribed:
+                db.session.add(Subscriber(email=email))
 
-            new_sub = Subscriber(email=email)
-            db.session.add(new_sub)
-            ensure_user_stub(email, commit=False)
+            if password:
+                if user and user.password_hash:
+                    db.session.commit()
+                    return jsonify(
+                        {
+                            "status": "info",
+                            "message": "looks like you already created an account. try logging in instead.",
+                        }
+                    )
+                hashed_pw = generate_password_hash(password)
+                user.password_hash = hashed_pw
+                db.session.commit()
+                login_user(user)
+                session["is_admin"] = bool(user.is_admin)
+                _send_subscription_email(email, "welcome", claim_url=None)
+                return jsonify(
+                    {
+                        "status": "success",
+                        "message": "account ready! you're now logged in.",
+                        "redirect_url": url_for("frontend.dashboard_redirect"),
+                    }
+                )
+
             db.session.commit()
-            _send_subscription_email(email, "welcome")
-            return jsonify({"status": "success", "message": "subscribed successfully!"})
+            needs_claim = bool(user and not (user.password_hash or "").strip())
+            email_kind = None
+            if not already_subscribed:
+                email_kind = "welcome"
+            elif needs_claim:
+                email_kind = "claim"
+
+            if email_kind:
+                _send_subscription_email(email, email_kind)
+
+            if not already_subscribed and needs_claim:
+                message = (
+                    "subscribed! check your email for a link to finish account setup."
+                )
+                status = "success"
+            elif not already_subscribed:
+                message = "subscribed! you're all set."
+                status = "success"
+            elif needs_claim:
+                message = (
+                    "you're already on the list, and we sent a fresh magic link to finish claiming your account."
+                )
+                status = "info"
+            else:
+                message = "you're already subscribed and have an account. try logging in instead."
+                status = "info"
+            return jsonify({"status": status, "message": message})
         except Exception as e:
             print(f"[subscribe] error: {e}")
             db.session.rollback()
@@ -856,59 +974,12 @@ def dashboard(email):
 
 @frontend.route("/signup", methods=["GET", "POST"])
 def signup():
+    """legacy endpoint funneling traffic to the combined subscribe/sign-up flow."""
     if request.method == "POST":
-        email = request.form["email"].strip().lower()
-        password = request.form["password"]
+        return subscribe()
 
-        existing_user = User.query.filter(func.lower(User.email) == email).first()
-        if existing_user:
-            if existing_user.password_hash:
-                flash("user already exists. try logging in instead.", "error")
-                return redirect(url_for("frontend.login"))
-
-            try:
-                existing_user.password_hash = generate_password_hash(password)
-                db.session.commit()
-            except Exception as exc:
-                db.session.rollback()
-                print(f"[signup] error claiming user: {exc}")
-                flash(
-                    "we couldn't finish sign-up. please try again in a moment.", "error"
-                )
-                return redirect(url_for("frontend.signup"))
-
-            login_user(existing_user)
-            _send_subscription_email(email, "welcome")
-            flash("account claimed! welcome aboard!", "success")
-            return redirect(url_for("frontend.dashboard_redirect"))
-
-        try:
-            # hash and store the password
-            hashed_pw = generate_password_hash(password)
-            new_user = User(email=email, password_hash=hashed_pw)
-            db.session.add(new_user)
-
-            # automatically subscribe new accounts if they are not already in the list
-            existing_sub = Subscriber.query.filter(
-                func.lower(Subscriber.email) == email
-            ).first()
-            if not existing_sub:
-                db.session.add(Subscriber(email=email))
-
-            db.session.commit()
-        except Exception as exc:
-            db.session.rollback()
-            print(f"[signup] error saving new user: {exc}")
-            flash("we couldn't finish sign up. please try again in a moment.", "error")
-            return redirect(url_for("frontend.signup"))
-
-        login_user(new_user)
-        _send_subscription_email(email, "welcome")
-        flash("sign up complete — welcome aboard!", "success")
-        return redirect(url_for("frontend.dashboard_redirect"))
-
-    return render_template("signup.html")
-
+    flash("heads up! sign up and subscribe now live on one streamlined page.", "info")
+    return redirect(url_for("frontend.subscribe"))
 
 @frontend.route("/forgot-password", methods=["GET", "POST"])
 def forgot_password():
@@ -955,6 +1026,50 @@ def reset_password(token):
         return redirect(url_for("frontend.login"))
 
     return render_template("reset_password.html", email=email)
+
+
+@frontend.route("/claim-account/<token>", methods=["GET", "POST"])
+def claim_account(token):
+    try:
+        email = get_serializer().loads(
+            token, salt="claim-account", max_age=CLAIM_TOKEN_MAX_AGE
+        )
+    except SignatureExpired:
+        flash("that claim link expired. request a new one from the subscribe page.", "error")
+        return redirect(url_for("frontend.subscribe"))
+    except BadSignature:
+        flash("invalid claim token. request a fresh link from the subscribe page.", "error")
+        return redirect(url_for("frontend.subscribe"))
+
+    user = get_user_by_email(email)
+    if not user:
+        user, _ = ensure_user_stub(email)
+
+    if user and user.password_hash:
+        flash("this account already has a password. try logging in instead.", "info")
+        return redirect(url_for("frontend.login"))
+
+    if request.method == "POST":
+        password = (request.form.get("password") or "").strip()
+        if not password:
+            flash("please enter a password.", "error")
+            return render_template("claim_account.html", email=email)
+
+        try:
+            user.password_hash = generate_password_hash(password)
+            db.session.commit()
+        except Exception as exc:
+            db.session.rollback()
+            print(f"[claim-account] failed to save password for {email}: {exc}")
+            flash("something went wrong. please try submitting again.", "error")
+            return render_template("claim_account.html", email=email)
+
+        login_user(user)
+        session["is_admin"] = bool(user.is_admin)
+        flash("account ready! you're now logged in.", "success")
+        return redirect(url_for("frontend.dashboard_redirect"))
+
+    return render_template("claim_account.html", email=email)
 
 
 # send feedback (contact form)
@@ -1012,7 +1127,21 @@ def _load_mail_config():
         return fallback
 
 
-def _send_subscription_email(to_email: str, kind: str = "welcome") -> bool:
+def _build_claim_link(email: str) -> str | None:
+    normalized = (email or "").strip().lower()
+    if not normalized:
+        return None
+    try:
+        token = get_serializer().dumps(normalized, salt="claim-account")
+        return url_for("frontend.claim_account", token=token, _external=True)
+    except Exception as exc:
+        print(f"[claim-link] unable to build token for {normalized}: {exc}")
+        return None
+
+
+def _send_subscription_email(
+    to_email: str, kind: str = "welcome", *, claim_url: str | None = None
+) -> bool:
     target = (to_email or "").strip()
     if not target:
         return False
@@ -1020,6 +1149,9 @@ def _send_subscription_email(to_email: str, kind: str = "welcome") -> bool:
     cfg = _load_mail_config()
     if not cfg:
         return False
+
+    if kind in {"welcome", "claim"}:
+        claim_url = claim_url or _build_claim_link(target)
 
     if kind == "farewell":
         subject = "you've been unsubscribed from digest"
@@ -1036,19 +1168,51 @@ def _send_subscription_email(to_email: str, kind: str = "welcome") -> bool:
             "<code>subscribe</code> to thearxivpaperscraper@gmail.com.</p>"
             "<p>clear skies!</p>"
         )
+    elif kind == "claim":
+        subject = "finish setting up your digest account"
+        text_link = claim_url or "https://paperscraper-one.vercel.app/subscribe"
+        html_link = (
+            f'<a href="{claim_url}">{claim_url}</a>'
+            if claim_url
+            else '<a href="https://paperscraper-one.vercel.app/subscribe">the subscribe page</a>'
+        )
+        text = (
+            "you're already on the daily digest list, but we still need a password so you can customize your feed.\n\n"
+            f"tap the link below to set one now:\n{text_link}\n\n"
+            "if you didn't expect this email, feel free to ignore it.\n\n"
+            "-- digest bot"
+        )
+        html = (
+            "<p>you're already on the daily digest list, but we still need a password so you can customize your feed.</p>"
+            "<p>tap the link below to set one now:</p>"
+            f"<p>{html_link}</p>"
+            "<p>if you didn't expect this email, feel free to ignore it.</p>"
+            "<p>-- digest bot</p>"
+        )
     else:
         subject = "welcome to the digest"
         text = (
             "welcome aboard!\n\n"
             "you'll now receive the daily digest with curated papers.\n"
-            "log in at https://paperscraper-one.vercel.app/ to set your preferences or send feedback anytime.\n\n"
-            "-- digest bot"
+            "log in at https://paperscraper-one.vercel.app/ to set your preferences or send feedback anytime.\n"
         )
+        if claim_url:
+            text += (
+                "\nwant to customize things right away? set a password with the secure link below:\n"
+                f"{claim_url}\n"
+            )
+        text += "\n-- digest bot"
         html = (
-            "<p>welcome aboard! you'll now receive the daily <strong>digest</strong>."
-            '</p><p>sign up at <a href="https://paperscraper-one.vercel.app/">paperscraper-one.vercel.app</a> to claim your account '
-            "and begin customizing your preferences and curate the papers you care about.</p><p>clear skies!</p>"
+            "<p>welcome aboard! you'll now receive the daily <strong>digest</strong>.</p>"
+            '<p>log in at <a href="https://paperscraper-one.vercel.app/">paperscraper-one.vercel.app</a> '
+            "to claim your account, customize preferences, and curate the papers you care about.</p>"
         )
+        if claim_url:
+            html += (
+                "<p>want to customize things right away? set a password with this secure link:</p>"
+                f'<p><a href="{claim_url}">{claim_url}</a></p>'
+            )
+        html += "<p>clear skies!</p>"
 
     email_context = f"lifecycle-{kind}"
     if not send_email(

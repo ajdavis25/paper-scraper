@@ -778,7 +778,10 @@ def render_paper_entry_html(paper, user_email, track_base):
     build one paper block (html) with personalized like/dislike links.
     """
     arxiv_id = paper.get("arxiv_id") or (paper.get("url", "").split("/")[-1])
-    title = paper.get("title", "")
+    raw_title = decode_unicode_escapes(paper.get("title", "") or "")
+    title_wrapped = wrap_inline_tex(raw_title)
+    title_html, _ = render_inline_math_html(title_wrapped)
+    title_markup = title_html or Markup.escape(raw_title) or "(no title)"
     link = paper.get("url") or canon_abs_url(paper) or ""
     authors = paper.get("authors", [])
     authors_line = ", ".join(authors) if isinstance(authors, list) else str(authors)
@@ -793,7 +796,7 @@ def render_paper_entry_html(paper, user_email, track_base):
     meta_tags = []
 
     parts.append("<li>")
-    parts.append(f"<p><strong><a href='{link}'>{title}</a></strong></p>")
+    parts.append(f"<p><strong><a href='{link}'>{title_markup}</a></strong></p>")
 
     if category:
         meta_tags.append(f"<span class='category-tag'>{category}</span>")
@@ -807,6 +810,7 @@ def render_paper_entry_html(paper, user_email, track_base):
     summary_text = paper.get("summary")
     has_math = False
     if summary_text:
+        summary_text = decode_unicode_escapes(summary_text)
         print("[email summary raw]", repr(summary_text))
         summary_wrapped = wrap_inline_tex(summary_text)
         summary_html, has_math = render_inline_math_html(summary_wrapped)
@@ -828,7 +832,9 @@ def render_paper_entry_text(paper, user_email, track_base):
     build one paper block (plain text) with personalized like/dislike links.
     """
     arxiv_id = paper.get("arxiv_id") or (paper.get("url", "").split("/")[-1])
-    title = paper.get("title", "")
+    raw_title = decode_unicode_escapes(paper.get("title", "") or "")
+    title_wrapped = wrap_inline_tex(raw_title)
+    title_plain = inline_math_to_plain(title_wrapped) or raw_title or "(no title)"
     link = paper.get("url") or canon_abs_url(paper) or ""
     authors = paper.get("authors", [])
     authors_line = ", ".join(authors) if isinstance(authors, list) else str(authors)
@@ -842,7 +848,7 @@ def render_paper_entry_text(paper, user_email, track_base):
     lines = []
     meta_info = []
 
-    lines.append(f"title: {title}")
+    lines.append(f"title: {title_plain}")
     lines.append(f"link: {link}")
 
     if category:
@@ -856,6 +862,7 @@ def render_paper_entry_text(paper, user_email, track_base):
         lines.append(f"authors: {authors_line}")
     summary = paper.get("summary")
     if summary:
+        summary = decode_unicode_escapes(summary)
         summary_wrapped = wrap_inline_tex(summary)
         summary_plain = inline_math_to_plain(summary_wrapped)
         lines.append(summary_plain)

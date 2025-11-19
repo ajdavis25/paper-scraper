@@ -1,7 +1,8 @@
-document.addEventListener("DOMContentLoaded", () => {
+﻿document.addEventListener("DOMContentLoaded", () => {
   const form =
     document.querySelector("#subscribe-form") ||
     document.querySelector("#unsubscribe-form");
+  const isSubscribeForm = form && form.id === "subscribe-form";
 
   if (!form) return;
 
@@ -19,15 +20,21 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   form.addEventListener("submit", (e) => {
-    e.preventDefault();  // prevent full page reload
+    e.preventDefault(); // prevent full page reload
 
     const email = form.querySelector("input[name='email']").value.trim();
     if (!email) return showMessage("please enter your email", "error");
 
+    const passwordInput = form.querySelector("input[name='password']");
+    const payload = { email };
+    if (passwordInput && passwordInput.value.trim()) {
+      payload.password = passwordInput.value;
+    }
+
     fetch(window.location.pathname, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email }),
+      body: JSON.stringify(payload),
     })
       .then((r) => r.json())
       .then((data) => {
@@ -39,7 +46,12 @@ document.addEventListener("DOMContentLoaded", () => {
             : "error";
         showMessage(data.message, type);
         form.reset();
+        if (isSubscribeForm && data.redirect_url) {
+          setTimeout(() => {
+            window.location.href = data.redirect_url;
+          }, 600);
+        }
       })
-      .catch(() => showMessage("server error — try again later.", "error"));
+      .catch(() => showMessage("server error - try again later.", "error"));
   });
 });

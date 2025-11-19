@@ -1,12 +1,11 @@
-{% extends "base.html" %} {% block title %}subscribe — arXiv digest{% endblock
+﻿{% extends "base.html" %} {% block title %}subscribe - arXiv digest{% endblock
 %} {% block content %}
 <section class="subscribe-section page-card">
   <h2>subscribe</h2>
   <p>
-    join the daily digest! enter your email below to subscribe, or send an email
-    to
-    <strong>thearxivpaperscraper@gmail.com</strong> with the subject line
-    <code>subscribe</code>.
+    join the daily digest! drop your email to get on the list. add a password
+    now to log in instantly, or leave it blank and we'll send a magic link so
+    you can claim the account later without re-entering anything.
   </p>
 
   <form id="subscribe-form" method="POST" novalidate>
@@ -17,8 +16,26 @@
       required
       class="input-field"
     />
+    <div class="optional-password">
+      <label for="password">password (optional)</label>
+      <input
+        type="password"
+        id="password"
+        name="password"
+        placeholder="create a password to log in immediately"
+        class="input-field"
+      />
+      <small>
+        skip this if you just want the emails - we'll send you a secure link to
+        set a password whenever you're ready.
+      </small>
+    </div>
     <button type="submit" class="btn">subscribe</button>
   </form>
+  <p class="helper-text">
+    already subscribed but need another claim link? enter the same email and
+    we'll resend it.
+  </p>
 </section>
 {% endblock %} {% block scripts %}
 <script src="{{ url_for('static', filename='js/subscriptions.js') }}"></script>

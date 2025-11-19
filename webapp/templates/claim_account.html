@@ -1,0 +1,22 @@
+{% extends "base.html" %} {% block title %}claim account - arXiv digest{%
+endblock %} {% block content %}
+<div class="form-box">
+  <h2 class="form-title">finish account setup</h2>
+  <p>
+    you're claiming <strong>{{ email }}</strong>. choose a password so you can
+    log in, customize preferences, and save favorites.
+  </p>
+
+  <form method="POST">
+    <label for="password">password</label>
+    <input type="password" id="password" name="password" required />
+
+    <button type="submit" class="submit-btn">save password</button>
+  </form>
+
+  <p class="signup-text">
+    already have a password?
+    <a href="{{ url_for('frontend.login') }}">login here</a>.
+  </p>
+</div>
+{% endblock %}
