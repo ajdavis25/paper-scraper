@@ -1,0 +1,50 @@
+name: Weekly Highlights Digest
+
+on:
+  schedule:
+    - cron: "30 14 * * 1"  # mondays 09:30 central
+  workflow_dispatch:
+
+jobs:
+  send-highlights:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          set -e
+          if [ -f "./requirements.txt" ]; then
+            pip install -r ./requirements.txt
+          else
+            echo "requirements.txt not found"; exit 1
+          fi
+
+      - name: Write config.yaml from secret
+        env:
+          CONFIG_YAML_B64: ${{ secrets.CONFIG_YAML_B64 }}
+        run: |
+          set -e
+          echo "$CONFIG_YAML_B64" | base64 --decode > ./config.yaml
+          echo "wrote config.yaml from github secret"
+
+      - name: Send weekly highlight digest
+        env:
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
+        run: |
+          set -e
+          if [ -f "./scripts/highlight_digest.py" ]; then
+            python ./scripts/highlight_digest.py --config ./config.yaml --frequency weekly
+          else
+            echo "scripts/highlight_digest.py missing"; exit 1
+          fi

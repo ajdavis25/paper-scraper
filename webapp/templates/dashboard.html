@@ -25,4 +25,41 @@
   <p>no saved likes yet.</p>
   {% endif %}
 </section>
+
+{% set highlight_days = highlight_window_days if highlight_window_days is
+defined else 3 %} {% set highlight_list = highlights if highlights is defined
+else [] %}
+<section class="page-card highlights-section">
+  <h2>recent highlights</h2>
+  <p class="section-subhead">
+    top liked papers from users like you (last {{ highlight_days }} day{{ '' if
+    highlight_days == 1 else 's' }})
+  </p>
+
+  {% if highlight_list %}
+  <ul class="paper-list highlights-list">
+    {% for item in highlight_list %}
+    <li>
+      <a href="{{ item.link }}" target="_blank">
+        {{ item.title or ('arXiv:' ~ item.arxiv_id) }}
+      </a>
+      <div class="highlight-meta">
+        {{ item.like_count }} like{{ 's' if item.like_count != 1 else '' }}
+        <span aria-hidden="true">&middot;</span>
+        {{ item.unique_fans }} reader{{ 's' if item.unique_fans != 1 else '' }}
+        <span aria-hidden="true">&middot;</span>
+        {% if item.last_liked_at %} last liked {{
+        item.last_liked_at.strftime("%Y-%m-%d %H:%M") }} {% else %} streaming in
+        now {% endif %}
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="muted">
+    no highlights from similar readers yet -- try again tomorrow after more
+    likes roll in.
+  </p>
+  {% endif %}
+</section>
 {% endblock %}

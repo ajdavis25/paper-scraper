@@ -1,4 +1,4 @@
-name: Daily astro-ph Digest
+name: Daily Digest
 
 on:
   schedule:
@@ -79,7 +79,7 @@ jobs:
           fi
 
       # STEP 5: run the main daily digest bot
-      - name: Run astro-ph digest bot
+      - name: Run daily digest bot
         env:
           EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
           EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
@@ -88,7 +88,7 @@ jobs:
           GMAIL_TOKEN_B64: ${{ secrets.GMAIL_TOKEN_B64 }}
         run: |
           set -e
-          echo "running astro-ph digest bot..."
+          echo "running arXiv digest bot..."
           if [ -f "./bot.py" ]; then
             python ./bot.py ./config.yaml
           else

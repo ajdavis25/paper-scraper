@@ -16,7 +16,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from itsdangerous import SignatureExpired, BadSignature
 from sqlalchemy import func, case
 from markupsafe import Markup
-import yaml, requests, os, xml.etree.ElementTree as ET
+import yaml, os
 from urllib.parse import quote_plus
 
 from shared.db import db
@@ -31,6 +31,11 @@ from webapp.models import (
     RecommendationSnapshot,
     GmailWatchState,
     DeliveryEvent,
+)
+from webapp.highlights import (
+    compute_recent_highlights,
+    fetch_arxiv_titles,
+    get_user_interest_categories,
 )
 from shared.utils import get_user_by_email, fetch_arxiv_feed, strip_html_tags
 from shared.mail import send_reset_email, get_serializer, send_email
@@ -928,7 +933,7 @@ def dashboard(email):
         for pref in liked_prefs
         if not (pref.paper.title or "").strip()
     ]
-    fetched_titles = _fetch_arxiv_titles(missing_ids)
+    fetched_titles = fetch_arxiv_titles(missing_ids)
 
     prefs = []
     updated = False
@@ -967,8 +972,27 @@ def dashboard(email):
             print(f"[dashboard] failed to persist fetched titles: {exc}")
 
     message = "read anything super yet?" if not prefs else None
+    highlight_window_days = 3
+    highlights = []
+    try:
+        categories = get_user_interest_categories(user)
+        exclude = [user.email] if user and user.email else []
+        highlights = compute_recent_highlights(
+            target_categories=categories,
+            window_days=highlight_window_days,
+            limit=5,
+            exclude_emails=exclude,
+        )
+    except Exception as exc:
+        print(f"[dashboard] unable to compute highlights for {email}: {exc}")
+
     return render_template(
-        "dashboard.html", user={"email": email}, prefs=prefs, message=message
+        "dashboard.html",
+        user={"email": email},
+        prefs=prefs,
+        message=message,
+        highlights=highlights,
+        highlight_window_days=highlight_window_days,
     )
 
 
@@ -1223,39 +1247,6 @@ def _send_subscription_email(
 
     print(f"[subscription-email] sent {kind} email to {target}")
     return True
-
-
-def _fetch_arxiv_titles(arxiv_ids: list[str]) -> dict[str, str]:
-    """fetch title data for arXiv ids that lack metadata in the database."""
-    ids = [aid for aid in (arxiv_ids or []) if aid]
-    if not ids:
-        return {}
-
-    titles: dict[str, str] = {}
-    base_url = "https://export.arxiv.org/api/query"
-    ns = {"atom": "http://www.w3.org/2005/Atom"}
-
-    for i in range(0, len(ids), 20):
-        chunk = ids[i : i + 20]
-        params = {"id_list": ",".join(chunk)}
-        try:
-            resp = requests.get(base_url, params=params, timeout=10)
-            resp.raise_for_status()
-            root = ET.fromstring(resp.text)
-            for entry in root.findall("atom:entry", ns):
-                entry_id = entry.find("atom:id", ns)
-                raw_id = (entry_id.text or "").strip() if entry_id is not None else ""
-                arxiv_id = raw_id.split("/abs/")[-1] if raw_id else ""
-                title_el = entry.find("atom:title", ns)
-                title_text = (
-                    (title_el.text or "").strip() if title_el is not None else ""
-                )
-                if arxiv_id and title_text:
-                    titles[arxiv_id] = title_text
-        except Exception as exc:
-            print(f"[dashboard] failed to fetch arxiv titles: {exc}")
-
-    return titles
 
 
 @frontend.route("/send-feedback", methods=["GET", "POST"])
