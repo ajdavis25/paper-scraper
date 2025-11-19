@@ -1,0 +1,175 @@
+{% extends "base.html" %} {% block title %}operations dashboard - arXiv digest{%
+endblock %} {% block content %}
+<section class="page-card admin-dashboard">
+  <h2>operations dashboard</h2>
+  <p class="muted">
+    live snapshot covering subscriber growth, engagement, delivery health, and
+    gmail webhook status.
+  </p>
+
+  <div class="admin-grid">
+    <div class="admin-card">
+      <h3>subscriber growth</h3>
+      <dl>
+        <div>
+          <dt>total subscribers</dt>
+          <dd>{{ subscriber_metrics.total }}</dd>
+        </div>
+        <div>
+          <dt>last 24h</dt>
+          <dd>+{{ subscriber_metrics.new_24h }}</dd>
+        </div>
+        <div>
+          <dt>last 7d</dt>
+          <dd>+{{ subscriber_metrics.new_7d }}</dd>
+        </div>
+        <div>
+          <dt>avg/day (30d)</dt>
+          <dd>{{ subscriber_metrics.avg_daily }}</dd>
+        </div>
+      </dl>
+      <div class="series">
+        <h4>daily adds (30d)</h4>
+        <ul class="series-list">
+          {% for point in subscriber_metrics.series %}
+          <li>
+            <span class="series-label">{{ point.day }}</span>
+            <span class="series-value">+{{ point.count }}</span>
+          </li>
+          {% else %}
+          <li class="muted">no subscriber data available.</li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+
+    <div class="admin-card">
+      <h3>open/click engagement</h3>
+      <dl>
+        <div>
+          <dt>total clicks (14d)</dt>
+          <dd>{{ engagement_metrics.total_clicks }}</dd>
+        </div>
+        <div>
+          <dt>email clicks</dt>
+          <dd>{{ engagement_metrics.email_clicks }}</dd>
+        </div>
+        <div>
+          <dt>in-app reactions</dt>
+          <dd>{{ engagement_metrics.web_clicks }}</dd>
+        </div>
+        <div>
+          <dt>like rate</dt>
+          <dd>{{ engagement_metrics.like_rate }}%</dd>
+        </div>
+      </dl>
+      <div class="series">
+        <h4>daily engagement</h4>
+        <ul class="series-list">
+          {% for point in engagement_metrics.series %}
+          <li>
+            <span class="series-label">{{ point.day }}</span>
+            <span class="series-value"
+              >{{ point.total }} total · {{ point.email }} email</span
+            >
+          </li>
+          {% else %}
+          <li class="muted">no engagement captured yet.</li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+
+    <div class="admin-card">
+      <h3>delivery health</h3>
+      <dl>
+        <div>
+          <dt>failures (24h)</dt>
+          <dd class="{{ 'alert' if delivery_metrics.failures_24h else '' }}">
+            {{ delivery_metrics.failures_24h }}
+          </dd>
+        </div>
+        <div>
+          <dt>failures (7d)</dt>
+          <dd>{{ delivery_metrics.failures_7d }}</dd>
+        </div>
+      </dl>
+      <div class="series">
+        <h4>failure trend</h4>
+        <ul class="series-list">
+          {% for point in delivery_metrics.series %}
+          <li>
+            <span class="series-label">{{ point.day }}</span>
+            <span class="series-value">{{ point.count }}</span>
+          </li>
+          {% else %}
+          <li class="muted">no delivery errors recorded.</li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+
+    <div class="admin-card">
+      <h3>gmail webhook</h3>
+      <div class="status-row">
+        <span class="status-pill status-{{ gmail_watch.status }}">
+          {{ gmail_watch.status }}
+        </span>
+        <span>last heartbeat: {{ gmail_watch.last_heartbeat }}</span>
+      </div>
+      <ul class="metrics-list">
+        <li>
+          <strong>history id:</strong> {{ gmail_watch.history_id or '-' }}
+        </li>
+        <li><strong>label id:</strong> {{ gmail_watch.label_id or '-' }}</li>
+      </ul>
+      <div class="alerts">
+        {% if gmail_watch.alerts %}
+        <p class="alert-text">alerts</p>
+        <ul>
+          {% for alert in gmail_watch.alerts %}
+          <li>{{ alert }}</li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <p class="muted">no alerts – webhook recently active.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="admin-card wide">
+    <h3>recent delivery failures</h3>
+    <div class="table-wrapper">
+      <table>
+        <thead>
+          <tr>
+            <th>time</th>
+            <th>recipient</th>
+            <th>subject</th>
+            <th>context</th>
+            <th>error</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for entry in delivery_metrics.recent %}
+          <tr>
+            <td>{{ entry.timestamp }}</td>
+            <td>{{ entry.recipient }}</td>
+            <td>{{ entry.subject }}</td>
+            <td>{{ entry.context }}</td>
+            <td>{{ entry.error or '-' }}</td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="5" class="muted text-center">
+              no failure events logged in the last week.
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+{% endblock %}

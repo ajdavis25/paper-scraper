@@ -1,15 +1,79 @@
 # shared/mail.py
 """
-shared/mail.py — email sending utility for astro-ph digest.
+shared/mail.py — email sending utility for arXiv digest.
 """
 import os, smtplib
 from flask_mail import Mail, Message
 from itsdangerous import URLSafeTimedSerializer
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from flask import current_app
+from flask import current_app, has_app_context
 
 mail = Mail()
+
+_DELIVERY_APP = None
+
+
+def _get_delivery_app():
+    """obtain or initialize an app for logging when no request context exists."""
+    if has_app_context():
+        return current_app._get_current_object()
+
+    global _DELIVERY_APP
+    if _DELIVERY_APP is False:
+        return None
+    if _DELIVERY_APP is not None:
+        return _DELIVERY_APP
+
+    try:
+        from webapp import create_app
+
+        _DELIVERY_APP = create_app()
+    except Exception as exc:
+        print(f"[mailer] unable to bootstrap app for delivery logging: {exc}")
+        _DELIVERY_APP = False
+        return None
+    return _DELIVERY_APP
+
+
+def _log_delivery_event(recipient, subject, status, context="transactional", error=None):
+    """
+    persist delivery metadata. falls back to its own app context when needed.
+    """
+    app = _get_delivery_app()
+    if not app:
+        return
+
+    try:
+        from webapp.models import DeliveryEvent
+    except Exception as exc:
+        print(f"[mailer] delivery log skipped (import error): {exc}")
+        return
+
+    def _write():
+        DeliveryEvent.log_event(
+            recipient=recipient or "(unknown)",
+            subject=subject,
+            status=status,
+            context=context,
+            provider="smtp",
+            error=error,
+            auto_commit=True,
+        )
+
+    if has_app_context():
+        try:
+            _write()
+        except Exception as exc:
+            print(f"[mailer] delivery log skipped: {exc}")
+        return
+
+    # create our own context for CLI usage
+    try:
+        with app.app_context():
+            _write()
+    except Exception as exc:
+        print(f"[mailer] delivery log skipped (ctx): {exc}")
 
 
 def get_serializer():
@@ -51,7 +115,7 @@ def send_reset_email(email, link):
     mail.send(msg)
 
 
-def send_email(cfg, subject, text, html=None, *, to_override=None):
+def send_email(cfg, subject, text, html=None, *, to_override=None, context="transactional"):
     """
     send email via gmail smtp using config.yaml -> output.email.
 
@@ -78,10 +142,13 @@ def send_email(cfg, subject, text, html=None, *, to_override=None):
             recipients = [recipients]
         elif recipients is None:
             recipients = [username] if username else []
+        recipients = [r for r in recipients if r]
 
         if not username or not password:
             print("[mailer] missing username or password - printing instead")
             print(f"TO: {recipients}\nSUBJECT: {subject}\n{text}")
+            for rec in recipients or ["(unknown)"]:
+                _log_delivery_event(rec, subject, "simulated", context)
             return True
 
         print(f"[mailer] sending real email from {from_addr} to {recipients}")
@@ -109,8 +176,12 @@ def send_email(cfg, subject, text, html=None, *, to_override=None):
             smtp.sendmail(from_addr, recipients, msg.as_bytes())
 
         print("[mailer] email sent successfully")
+        for rec in recipients:
+            _log_delivery_event(rec, subject, "sent", context)
         return True
 
     except Exception as e:
         print(f"[mailer] error: {e}")
+        for rec in recipients or ["(unknown)"]:
+            _log_delivery_event(rec, subject, "failed", context, error=str(e))
         return False

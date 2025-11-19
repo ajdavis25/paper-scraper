@@ -57,6 +57,7 @@ def create_app():
         Subscriber,
         Feedback,
         PreferenceConfig,
+        DeliveryEvent,
         ensure_preference_config_schema,
     )
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-from datetime import datetime
+from datetime import datetime, timedelta
 from flask import (
     Blueprint,
     render_template,
@@ -14,7 +14,7 @@ from flask import (
 from flask_login import current_user, login_required, login_user, logout_user
 from werkzeug.security import generate_password_hash, check_password_hash
 from itsdangerous import SignatureExpired, BadSignature
-from sqlalchemy import func
+from sqlalchemy import func, case
 from markupsafe import Markup
 import yaml, requests, os, xml.etree.ElementTree as ET
 from urllib.parse import quote_plus
@@ -29,6 +29,8 @@ from webapp.models import (
     Feedback,
     PreferenceConfig,
     RecommendationSnapshot,
+    GmailWatchState,
+    DeliveryEvent,
 )
 from shared.utils import get_user_by_email, fetch_arxiv_feed, strip_html_tags
 from shared.mail import send_reset_email, get_serializer, send_email
@@ -1048,7 +1050,10 @@ def _send_subscription_email(to_email: str, kind: str = "welcome") -> bool:
             "and begin customizing your preferences and curate the papers you care about.</p><p>clear skies!</p>"
         )
 
-    if not send_email(cfg, subject, text, html, to_override=[target]):
+    email_context = f"lifecycle-{kind}"
+    if not send_email(
+        cfg, subject, text, html, to_override=[target], context=email_context
+    ):
         print(f"[subscription-email] failed to send {kind} email to {target}")
         return False
 
@@ -1137,7 +1142,9 @@ def user_feedback():
     )
     to_list = [feedback_to] if feedback_to else None
 
-    if not send_email(cfg, subject, text, html, to_override=to_list):
+    if not send_email(
+        cfg, subject, text, html, to_override=to_list, context="feedback-forward"
+    ):
         print("[send-feedback] mail send failed")
         # still return success since it was saved in db
         return jsonify({"message": "feedback stored but email failed"}), 202
@@ -1331,6 +1338,193 @@ def like_from_email():
             message=message,
         ),
         status,
+    )
+
+
+# admin dashboard helpers
+def _date_label(value):
+    if not value:
+        return "-"
+    try:
+        if hasattr(value, "strftime"):
+            return value.strftime("%Y-%m-%d")
+    except Exception:
+        pass
+    return str(value)
+
+
+@frontend.route("/admin/ops", methods=["GET"])
+@login_required
+def admin_ops_dashboard():
+    """surface subscriber, engagement, delivery, and gmail watch health."""
+    if not current_user.is_admin:
+        abort(403)
+
+    now = datetime.utcnow()
+
+    # subscriber growth (last 30 days)
+    growth_window = now - timedelta(days=30)
+    growth_day = func.date(Subscriber.created_at)
+    growth_rows = (
+        db.session.query(growth_day.label("day"), func.count(Subscriber.id).label("count"))
+        .filter(Subscriber.created_at >= growth_window)
+        .group_by(growth_day)
+        .order_by(growth_day)
+        .all()
+    )
+    growth_series = [
+        {"day": _date_label(row.day), "count": int(row.count or 0)} for row in growth_rows
+    ]
+    subs_total = db.session.query(func.count(Subscriber.id)).scalar() or 0
+    subs_7d = (
+        db.session.query(func.count(Subscriber.id))
+        .filter(Subscriber.created_at >= now - timedelta(days=7))
+        .scalar()
+        or 0
+    )
+    subs_24h = (
+        db.session.query(func.count(Subscriber.id))
+        .filter(Subscriber.created_at >= now - timedelta(days=1))
+        .scalar()
+        or 0
+    )
+    growth_total = sum(point["count"] for point in growth_series)
+    avg_daily_growth = round(growth_total / len(growth_series), 2) if growth_series else 0
+    subscriber_metrics = {
+        "total": subs_total,
+        "new_24h": subs_24h,
+        "new_7d": subs_7d,
+        "series": growth_series,
+        "avg_daily": avg_daily_growth,
+    }
+
+    # engagement metrics from recommendation feedback
+    engagement_window = now - timedelta(days=14)
+    fb_day = func.date(Feedback.timestamp)
+    engagement_rows = (
+        db.session.query(
+            fb_day.label("day"),
+            func.count(Feedback.id).label("total"),
+            func.sum(case((Feedback.source == "email", 1), else_=0)).label("email_clicks"),
+            func.sum(case((Feedback.liked == True, 1), else_=0)).label("likes"),
+        )
+        .filter(
+            Feedback.type == "recommendation",
+            Feedback.timestamp >= engagement_window,
+        )
+        .group_by(fb_day)
+        .order_by(fb_day)
+        .all()
+    )
+    engagement_series = [
+        {
+            "day": _date_label(row.day),
+            "total": int(row.total or 0),
+            "email": int(row.email_clicks or 0),
+            "likes": int(row.likes or 0),
+        }
+        for row in engagement_rows
+    ]
+    total_clicks = sum(point["total"] for point in engagement_series)
+    email_clicks = sum(point["email"] for point in engagement_series)
+    like_count = sum(point["likes"] for point in engagement_series)
+    like_rate = round((like_count / total_clicks) * 100.0, 1) if total_clicks else 0.0
+    engagement_metrics = {
+        "total_clicks": total_clicks,
+        "email_clicks": email_clicks,
+        "web_clicks": max(total_clicks - email_clicks, 0),
+        "like_rate": like_rate,
+        "series": engagement_series,
+    }
+
+    # delivery failures
+    failure_window = now - timedelta(days=7)
+    failure_day = func.date(DeliveryEvent.created_at)
+    failure_rows = (
+        db.session.query(
+            failure_day.label("day"),
+            func.count(DeliveryEvent.id).label("count"),
+        )
+        .filter(
+            DeliveryEvent.created_at >= failure_window,
+            DeliveryEvent.status != "sent",
+        )
+        .group_by(failure_day)
+        .order_by(failure_day)
+        .all()
+    )
+    failure_series = [
+        {"day": _date_label(row.day), "count": int(row.count or 0)} for row in failure_rows
+    ]
+    failures_7d = sum(point["count"] for point in failure_series)
+    failures_24h = (
+        DeliveryEvent.query.filter(
+            DeliveryEvent.created_at >= now - timedelta(days=1),
+            DeliveryEvent.status != "sent",
+        ).count()
+        or 0
+    )
+    recent_failures = (
+        DeliveryEvent.query.filter(
+            DeliveryEvent.created_at >= failure_window, DeliveryEvent.status != "sent"
+        )
+        .order_by(DeliveryEvent.created_at.desc())
+        .limit(15)
+        .all()
+    )
+    failure_entries = [
+        {
+            "recipient": entry.recipient,
+            "subject": entry.subject or "(no subject)",
+            "context": entry.context or "-",
+            "error": entry.error or "",
+            "timestamp": entry.created_at.strftime("%Y-%m-%d %H:%M")
+            if entry.created_at
+            else "-",
+        }
+        for entry in recent_failures
+    ]
+    delivery_metrics = {
+        "failures_24h": failures_24h,
+        "failures_7d": failures_7d,
+        "series": failure_series,
+        "recent": failure_entries,
+    }
+
+    # gmail watch health check
+    stale_hours = 6
+    watch_state = None
+    try:
+        watch_state = GmailWatchState.get_state()
+    except Exception as exc:
+        print(f"[admin/ops] unable to load Gmail watch state: {exc}")
+    last_heartbeat = None
+    if watch_state:
+        last_heartbeat = watch_state.updated_at or watch_state.created_at
+    stale_cutoff = now - timedelta(hours=stale_hours)
+    is_stale = (last_heartbeat is None) or (last_heartbeat < stale_cutoff)
+    missing_history = bool(watch_state) and not (watch_state.history_id or "").strip()
+    gmail_alerts = []
+    if is_stale:
+        gmail_alerts.append(f"no webhook activity detected in the past {stale_hours}h.")
+    if missing_history:
+        gmail_alerts.append("gmail watch history id missing; webhook may need re-init.")
+    gmail_watch = {
+        "history_id": watch_state.history_id if watch_state else None,
+        "label_id": watch_state.label_id if watch_state else None,
+        "last_heartbeat": last_heartbeat.strftime("%Y-%m-%d %H:%M")
+        if last_heartbeat
+        else "never",
+        "status": "ok" if not gmail_alerts else "warning",
+        "alerts": gmail_alerts,
+    }
+
+    return render_template(
+        "admin_dashboard.html",
+        subscriber_metrics=subscriber_metrics,
+        engagement_metrics=engagement_metrics,
+        delivery_metrics=delivery_metrics,
+        gmail_watch=gmail_watch,
     )
 
 

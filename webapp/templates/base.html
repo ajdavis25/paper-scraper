@@ -57,6 +57,7 @@
         <a href="/recommendations">recommendations</a>
         <a href="/send-feedback">send feedback</a>
         {% if current_user.is_authenticated and current_user.is_admin %}
+        <a href="/admin/ops">ops dashboard</a>
         <a href="/view-feedback">user feedback</a>
         {% endif %}
         <a href="/logout">logout</a>

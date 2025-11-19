@@ -202,6 +202,55 @@ class GmailWatchState(db.Model, TimestampMixin):
         db.session.commit()
 
 
+class DeliveryEvent(db.Model, TimestampMixin):
+    __tablename__ = "delivery_event"
+
+    id = db.Column(db.Integer, primary_key=True)
+    recipient = db.Column(db.String(255), nullable=False, index=True)
+    subject = db.Column(db.String(255), nullable=True)
+    status = db.Column(db.String(32), nullable=False, default="sent", index=True)
+    context = db.Column(db.String(64), nullable=True)
+    provider = db.Column(db.String(64), nullable=True)
+    error = db.Column(db.Text, nullable=True)
+
+    @staticmethod
+    def _clean_subject(subject: str | None) -> str:
+        trimmed = (subject or "").strip()
+        return trimmed[:255]
+
+    @classmethod
+    def log_event(
+        cls,
+        *,
+        recipient: str,
+        subject: str | None,
+        status: str,
+        context: str | None = None,
+        provider: str | None = None,
+        error: str | None = None,
+        auto_commit: bool = True,
+    ):
+        """record a delivery attempt for operator insight."""
+        normalized_recipient = (recipient or "").strip().lower() or "(unknown)"
+        event = cls(
+            recipient=normalized_recipient,
+            subject=cls._clean_subject(subject),
+            status=(status or "unknown").strip().lower(),
+            context=(context or None),
+            provider=(provider or None),
+            error=(error or None),
+        )
+        db.session.add(event)
+        if not auto_commit:
+            return event
+        try:
+            db.session.commit()
+        except Exception as exc:
+            db.session.rollback()
+            print(f"[delivery-event] failed to commit log entry: {exc}")
+        return event
+
+
 def ensure_preference_config_schema():
     """
     ensure the preference_config table has a user_id column so we can store
