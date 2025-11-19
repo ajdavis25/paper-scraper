@@ -15,16 +15,29 @@ block content %}
     nav_user_is_subscribed %}
     <a class="btn btn-secondary" href="/unsubscribe">unsubscribe</a>
     {% endif %}
+    <button
+      class="btn btn-secondary"
+      onclick="window.location.href='/onboarding'"
+    >
+      get started
+    </button>
     <button class="btn" onclick="window.location.href='/dashboard'">
       dashboard
     </button>
   </div>
   <h3 class="accent-text">get started</h3>
+  <p>
+    prefer a guided walkthrough? the new
+    <a href="/onboarding">get started tab</a> walks new accounts through the
+    same setup flow below so you can start with solid defaults in just a few
+    clicks.
+  </p>
   <ol>
     <li>
       <strong>subscribe or sign up:</strong> drop your email on the
       <a href="/subscribe">subscribe</a> page or create an account so you can
-      tweak everything from the dashboard.
+      tweak everything from the dashboard, then pop over to the
+      <a href="/onboarding">get started tab</a> for a guided setup.
     </li>
     <li>
       <strong>set your filters:</strong> users can visit
