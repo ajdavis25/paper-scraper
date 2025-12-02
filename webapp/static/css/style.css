@@ -578,6 +578,52 @@ footer {
   margin-top: 1rem;
 }
 
+.advanced-controls {
+  margin-top: 1.5rem;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 0.5rem 1rem 1rem;
+  background: #fafafa;
+}
+
+.advanced-controls summary {
+  font-weight: 600;
+  cursor: pointer;
+  list-style: none;
+}
+
+.advanced-controls summary::-webkit-details-marker {
+  display: none;
+}
+
+.advanced-controls summary::after {
+  content: "▸";
+  float: right;
+  transition: transform 0.2s ease;
+}
+
+.advanced-controls[open] summary::after {
+  transform: rotate(90deg);
+}
+
+.advanced-hint {
+  font-size: 0.9rem;
+  color: #555;
+  margin: 0.4rem 0 1rem;
+}
+
+.advanced-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+}
+
+.weight-field small {
+  display: block;
+  color: #777;
+  margin-top: 0.2rem;
+}
+
 .feedback-table {
   width: 100%;
   border-collapse: collapse;

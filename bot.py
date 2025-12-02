@@ -7,6 +7,7 @@ from mailer import send_email
 from curator import merge_preferences
 from sqlalchemy import func
 from shared.db import db
+from shared.preferences import WEIGHT_DEFAULTS
 from shared.utils import (
     wrap_inline_tex,
     render_inline_math_html,
@@ -17,7 +18,7 @@ from shared.utils import (
 print(f"[arxiv bot] running: {__file__} SHA={os.environ.get('GITHUB_SHA', 'local')}")
 
 # arXiv id pattern and canonical link helper
-_ARXIV_ID_RE = re.compile(r'(?:arxiv\.org/(?:abs|pdf)/)?(\d{4}\.\d{4,5})(v\d+)?', re.I)
+_ARXIV_ID_RE = re.compile(r"(?:arxiv\.org/(?:abs|pdf)/)?(\d{4}\.\d{4,5})(v\d+)?", re.I)
 
 # simple on-disk cache to avoid hammering arXiv during tests
 CACHE_FILE = "cached_arxiv.json"
@@ -120,6 +121,7 @@ def canon_abs_url(paper):
         return f"https://arxiv.org/abs/{paper['arxiv_id']}"
     return ""
 
+
 def _dedupe_preserve_order(items):
     seen = set()
     result = []
@@ -133,6 +135,7 @@ def _dedupe_preserve_order(items):
         result.append(item)
     return result
 
+
 def _clone_preferences(prefs):
     cloned = {}
     for key, value in (prefs or {}).items():
@@ -143,6 +146,7 @@ def _clone_preferences(prefs):
         else:
             cloned[key] = value
     return cloned
+
 
 def _combine_preferences(base, overrides):
     merged = {}
@@ -166,8 +170,10 @@ def _combine_preferences(base, overrides):
             merged[key] = base_val
     return merged
 
+
 def _normalize_email(email: str) -> str:
     return (email or "").strip().lower()
+
 
 def load_config(path=None):
     """
@@ -192,7 +198,9 @@ def load_config(path=None):
             print(f"[arxiv bot] using config: {candidate}")
             with open(candidate, "r", encoding="utf-8") as f:
                 raw = f.read()
-            expanded = re.sub(r"\$\{([^}]+)\}", lambda m: os.getenv(m.group(1), ""), raw)
+            expanded = re.sub(
+                r"\$\{([^}]+)\}", lambda m: os.getenv(m.group(1), ""), raw
+            )
             return yaml.safe_load(expanded)
 
     raise FileNotFoundError(f"config.yaml not found in any of {candidates}")
@@ -262,7 +270,9 @@ def fetch_recent(cfg):
     raw_chunk_size = arxiv_cfg.get("chunk_size") or arxiv_cfg.get("request_chunk_size")
     default_chunk = min(50, max_results)
     try:
-        chunk_size = int(raw_chunk_size) if raw_chunk_size is not None else default_chunk
+        chunk_size = (
+            int(raw_chunk_size) if raw_chunk_size is not None else default_chunk
+        )
     except (TypeError, ValueError):
         chunk_size = default_chunk
     if chunk_size <= 0:
@@ -278,8 +288,12 @@ def fetch_recent(cfg):
         chunk_delay = _MIN_INTERVAL if chunk_size < max_results else 0.0
     chunk_delay = max(0.0, chunk_delay)
 
-    read_timeout = arxiv_cfg.get("read_timeout") or arxiv_cfg.get("request_timeout") or 45.0
-    connect_timeout = arxiv_cfg.get("connect_timeout") or arxiv_cfg.get("timeout_connect") or 8.0
+    read_timeout = (
+        arxiv_cfg.get("read_timeout") or arxiv_cfg.get("request_timeout") or 45.0
+    )
+    connect_timeout = (
+        arxiv_cfg.get("connect_timeout") or arxiv_cfg.get("timeout_connect") or 8.0
+    )
     try:
         read_timeout = float(read_timeout)
     except (TypeError, ValueError):
@@ -299,7 +313,9 @@ def fetch_recent(cfg):
     except (TypeError, ValueError):
         days_back = 1.0
     lookback_days = max(1, int(math.ceil(days_back)))
-    range_start = (now - dt.timedelta(days=lookback_days)).replace(hour=0, minute=0, second=0, microsecond=0)
+    range_start = (now - dt.timedelta(days=lookback_days)).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
 
     raw_days_forward = arxiv_cfg.get("days_forward", 0)
     try:
@@ -344,7 +360,9 @@ def fetch_recent(cfg):
                 f"[arxiv bot] query URL: {url} (chunk_size={page_size}, timeout={timeout[1]:.0f}s)"
             )
         else:
-            print(f"[arxiv bot] chunk {chunk_index + 1}: start={start}, size={page_size}")
+            print(
+                f"[arxiv bot] chunk {chunk_index + 1}: start={start}, size={page_size}"
+            )
 
         data = _download_arxiv_feed(url, headers, timeout)
         feed = feedparser.parse(data)
@@ -368,14 +386,18 @@ def fetch_recent(cfg):
         # choose updated date if available (more accurate for new versions)
         try:
             if getattr(entry, "updated_parsed", None):
-                pub = dt.datetime.fromtimestamp(time.mktime(entry.updated_parsed)).astimezone(dt.timezone.utc)
+                pub = dt.datetime.fromtimestamp(
+                    time.mktime(entry.updated_parsed)
+                ).astimezone(dt.timezone.utc)
             else:
                 pub = dt.datetime.fromisoformat(entry.published.replace("Z", "+00:00"))
         except Exception:
             pub = dt.datetime.now(dt.timezone.utc)
 
         entry_id = getattr(entry, "id", "")
-        m = _ARXIV_ID_RE.search(entry_id) or _ARXIV_ID_RE.search(getattr(entry, "link", ""))
+        m = _ARXIV_ID_RE.search(entry_id) or _ARXIV_ID_RE.search(
+            getattr(entry, "link", "")
+        )
         arxiv_id = (m.group(1) + (m.group(2) or "")) if m else ""
         if arxiv_id and arxiv_id in seen_ids:
             continue
@@ -388,7 +410,9 @@ def fetch_recent(cfg):
         categories = []
         primary_category = ""
         for tag in getattr(entry, "tags", []) or []:
-            term = getattr(tag, "term", "") or (tag.get("term") if isinstance(tag, dict) else "")
+            term = getattr(tag, "term", "") or (
+                tag.get("term") if isinstance(tag, dict) else ""
+            )
             if term:
                 categories.append(term)
         if getattr(entry, "arxiv_primary_category", None):
@@ -479,12 +503,18 @@ def _write_cache_safely(results):
 
 def _parse_args():
     parser = argparse.ArgumentParser(description="arxiv digest bot")
-    parser.add_argument("--no-cache", action="store_true", help="force fresh pull from arxiv")
-    parser.add_argument("config_path", nargs="?", help="path to config file (defaults to config.yaml)")
+    parser.add_argument(
+        "--no-cache", action="store_true", help="force fresh pull from arxiv"
+    )
+    parser.add_argument(
+        "config_path", nargs="?", help="path to config file (defaults to config.yaml)"
+    )
     return parser.parse_args()
 
 
-def load_or_fetch(cfg, *, use_cache=True, max_age=_CACHE_MAX_AGE, min_items=_CACHE_MIN_ITEMS):
+def load_or_fetch(
+    cfg, *, use_cache=True, max_age=_CACHE_MAX_AGE, min_items=_CACHE_MIN_ITEMS
+):
     cached_payload = None
     cache_reason = ""
     if use_cache and os.path.exists(CACHE_FILE):
@@ -495,7 +525,9 @@ def load_or_fetch(cfg, *, use_cache=True, max_age=_CACHE_MAX_AGE, min_items=_CAC
             if valid:
                 age = info
                 results = cached_payload["results"]
-                print(f"[cache] using cached results from {CACHE_FILE} (age={int(age)}s, items={len(results)})")
+                print(
+                    f"[cache] using cached results from {CACHE_FILE} (age={int(age)}s, items={len(results)})"
+                )
                 return results, "cache-ok"
             cache_reason = info
             print(f"[cache] cache not suitable ({cache_reason}) — refetching")
@@ -512,9 +544,17 @@ def load_or_fetch(cfg, *, use_cache=True, max_age=_CACHE_MAX_AGE, min_items=_CAC
         except Exception as exc:
             print(f"[cache] warning: could not save cache ({exc})")
         return fresh_results, "fresh-fetch"
-    print(f"[cache] fresh fetch returned {len(fresh_results)} items (<{min_items}); not caching")
-    if cached_payload and isinstance(cached_payload.get("results"), list) and cached_payload["results"]:
-        print(f"[cache] falling back to cached results despite ({cache_reason or 'unknown'})")
+    print(
+        f"[cache] fresh fetch returned {len(fresh_results)} items (<{min_items}); not caching"
+    )
+    if (
+        cached_payload
+        and isinstance(cached_payload.get("results"), list)
+        and cached_payload["results"]
+    ):
+        print(
+            f"[cache] falling back to cached results despite ({cache_reason or 'unknown'})"
+        )
         return cached_payload["results"], f"stale-fallback:{cache_reason or 'unknown'}"
     return fresh_results, "fresh-insufficient"
 
@@ -539,7 +579,12 @@ def _validate_cache_payload(payload, max_age, min_items):
 def load_db_recipients(fallback_prefs):
     """fetch recipient preference profiles from the database, if available."""
     try:
-        from webapp.models import User, Subscriber, PreferenceConfig, RecommendationSnapshot
+        from webapp.models import (
+            User,
+            Subscriber,
+            PreferenceConfig,
+            RecommendationSnapshot,
+        )
         from sqlalchemy.orm import joinedload
     except Exception as exc:
         print(f"[arxiv bot] skipping db preferences (import error: {exc})")
@@ -558,7 +603,9 @@ def load_db_recipients(fallback_prefs):
             )
         else:
             default_prefs = _standardize_preferences(fallback_prefs)
-        default_categories = _dedupe_preserve_order(default_prefs.get("categories") or [])
+        default_categories = _dedupe_preserve_order(
+            default_prefs.get("categories") or []
+        )
 
         users = User.query.options(joinedload(User.preference_config)).all()
         for user in users:
@@ -678,8 +725,12 @@ def curate(
         authors = r.get("authors", [])
         url = canon_abs_url(r) or r.get("link", "")
         paper_categories = r.get("categories") or []
-        primary = r.get("primary_category") or (paper_categories[0] if paper_categories else "")
-        category_for_filter = primary or (paper_categories[0] if paper_categories else "")
+        primary = r.get("primary_category") or (
+            paper_categories[0] if paper_categories else ""
+        )
+        category_for_filter = primary or (
+            paper_categories[0] if paper_categories else ""
+        )
 
         # category filter
         if allowed and category_for_filter:
@@ -698,25 +749,36 @@ def curate(
             continue
 
         # add to curated list
-        curated.append({
-            "title": title,
-            "summary": summary,
-            "authors": authors,
-            "url": url,
-            "pdf_url": r.get("pdf_url", ""),
-            "category": primary or (paper_categories[0] if paper_categories else (allowed[0] if allowed else "")),
-            "published": r.get("published"),
-            "score": score,
-            "details": details,
-            "arxiv_id": r.get("arxiv_id", "") or (url.split("/")[-1] if url else ""),
-        })
+        curated.append(
+            {
+                "title": title,
+                "summary": summary,
+                "authors": authors,
+                "url": url,
+                "pdf_url": r.get("pdf_url", ""),
+                "category": primary
+                or (
+                    paper_categories[0]
+                    if paper_categories
+                    else (allowed[0] if allowed else "")
+                ),
+                "published": r.get("published"),
+                "score": score,
+                "details": details,
+                "arxiv_id": r.get("arxiv_id", "")
+                or (url.split("/")[-1] if url else ""),
+            }
+        )
 
-    print(f"[debug] curated {len(curated)} papers for {email or 'unknown user'} (min_score={min_score})")
+    print(
+        f"[debug] curated {len(curated)} papers for {email or 'unknown user'} (min_score={min_score})"
+    )
     return curated
 
 
 def select_top(curated, min_keep=3, max_keep=5, base_min_score=1.0):
     """adaptive selector that keeps 3–5 papers per day."""
+
     def keyfn(x):
         d = x.get("details", {})
         auth = d.get("auth_hits", 0)
@@ -747,7 +809,11 @@ def select_top(curated, min_keep=3, max_keep=5, base_min_score=1.0):
 
 
 def format_authors(authors, max_authors=5):
-    names = [a.name for a in authors] if authors and hasattr(authors[0], "name") else authors
+    names = (
+        [a.name for a in authors]
+        if authors and hasattr(authors[0], "name")
+        else authors
+    )
     if not names:
         return ""
     if len(names) > max_authors:
@@ -789,7 +855,9 @@ def render_paper_entry_html(paper, user_email, track_base):
     score = paper.get("score")
 
     like_link = f"{track_base}/like?email={user_email}&arxiv_id={arxiv_id}&liked=true"
-    dislike_link = f"{track_base}/like?email={user_email}&arxiv_id={arxiv_id}&liked=false"
+    dislike_link = (
+        f"{track_base}/like?email={user_email}&arxiv_id={arxiv_id}&liked=false"
+    )
 
     # initialize containers
     parts = []
@@ -817,7 +885,9 @@ def render_paper_entry_html(paper, user_email, track_base):
         parts.append(f"<p>{summary_html}</p>")
         relevance = _relevance_explanation(paper.get("details"))
         if relevance:
-            parts.append(f"<p class='why-this'>why this paper? {Markup.escape(relevance)}</p>")
+            parts.append(
+                f"<p class='why-this'>why this paper? {Markup.escape(relevance)}</p>"
+            )
 
     parts.append(
         f"<p><a href='{like_link}'>👍 like</a> | <a href='{dislike_link}'>👎 dislike</a></p>"
@@ -842,7 +912,9 @@ def render_paper_entry_text(paper, user_email, track_base):
     score = paper.get("score")
 
     like_link = f"{track_base}/like?email={user_email}&arxiv_id={arxiv_id}&liked=true"
-    dislike_link = f"{track_base}/like?email={user_email}&arxiv_id={arxiv_id}&liked=false"
+    dislike_link = (
+        f"{track_base}/like?email={user_email}&arxiv_id={arxiv_id}&liked=false"
+    )
 
     # initialize containers
     lines = []
@@ -892,7 +964,9 @@ def make_email_body_for_recipient(user_email, curated, track_base):
         html_entries.append(entry_html)
         found_math = found_math or entry_math
 
-    style_block = "<style>.math-inline{font-style:italic;}</style>" if found_math else ""
+    style_block = (
+        "<style>.math-inline{font-style:italic;}</style>" if found_math else ""
+    )
 
     html_body = (
         "<html><head>"
@@ -909,9 +983,15 @@ def _standardize_preferences(prefs):
     normalized = _clone_preferences(prefs or {})
     if "any_keywords" not in normalized and normalized.get("keywords") is not None:
         normalized["any_keywords"] = list(normalized.get("keywords") or [])
-    if "all_keywords" not in normalized and normalized.get("required_keywords") is not None:
+    if (
+        "all_keywords" not in normalized
+        and normalized.get("required_keywords") is not None
+    ):
         normalized["all_keywords"] = list(normalized.get("required_keywords") or [])
-    if "exclude_keywords" not in normalized and normalized.get("excluded_keywords") is not None:
+    if (
+        "exclude_keywords" not in normalized
+        and normalized.get("excluded_keywords") is not None
+    ):
         normalized["exclude_keywords"] = list(normalized.get("excluded_keywords") or [])
     for key in (
         "any_keywords",
@@ -924,9 +1004,14 @@ def _standardize_preferences(prefs):
     ):
         if isinstance(normalized.get(key), list):
             normalized[key] = _dedupe_preserve_order(normalized[key])
-    normalized["categories"] = _dedupe_preserve_order(normalized.get("categories") or [])
+    normalized["categories"] = _dedupe_preserve_order(
+        normalized.get("categories") or []
+    )
     if normalized.get("min_score") is None:
         normalized["min_score"] = 1.0
+    for field, default in WEIGHT_DEFAULTS.items():
+        if normalized.get(field) is None:
+            normalized[field] = default
     return normalized
 
 
@@ -938,7 +1023,10 @@ def main():
     subject_prefix = email_cfg.get("subject_prefix", "[arxiv digest]")
     preferences = cfg.get("preferences", {})
     print(f"[debug] global preferences:", json.dumps(preferences, indent=2))
-    print(f"[debug] email preferences:", json.dumps(email_cfg.get("preferences", {}), indent=2))
+    print(
+        f"[debug] email preferences:",
+        json.dumps(email_cfg.get("preferences", {}), indent=2),
+    )
 
     today = dt.datetime.now(dt.timezone.utc)
     if today.weekday() >= 5:
@@ -956,9 +1044,13 @@ def main():
 
     recipient_profiles = {}
     if test_mode:
-        test_addr = (cfg.get("test_recipient") or email_cfg.get("test_recipient") or "").strip()
+        test_addr = (
+            cfg.get("test_recipient") or email_cfg.get("test_recipient") or ""
+        ).strip()
         if not test_addr:
-            print("[arxiv bot] TEST MODE enabled but no test_recipient configured; aborting.")
+            print(
+                "[arxiv bot] TEST MODE enabled but no test_recipient configured; aborting."
+            )
             return
         print(f"[arxiv bot] TEST MODE ENABLED — will only send to {test_addr}")
         normalized = _normalize_email(test_addr)
@@ -1039,7 +1131,9 @@ def main():
             recipient_profiles[key] = profile
         prefs = profile["prefs"]
         allowed_categories = _dedupe_preserve_order(
-            profile.get("categories") or fallback_prefs.get("categories") or cfg["arxiv"]["categories"]
+            profile.get("categories")
+            or fallback_prefs.get("categories")
+            or cfg["arxiv"]["categories"]
         )
         if not allowed_categories:
             allowed_categories = ["astro-ph"]
@@ -1058,24 +1152,36 @@ def main():
             f"(min_score {prefs.get('min_score', 1.0)}) within categories {allowed_categories}"
         )
         if not curated:
-            print(f"[arxiv bot] {actual_email}: no papers met the criteria; not sending email.")
+            print(
+                f"[arxiv bot] {actual_email}: no papers met the criteria; not sending email."
+            )
             continue
 
         base_thr = prefs.get("min_score", fallback_prefs.get("min_score", 1.0))
-        selected, eff_thr = select_top(curated, min_keep=min_keep, max_keep=max_keep, base_min_score=base_thr)
+        selected, eff_thr = select_top(
+            curated, min_keep=min_keep, max_keep=max_keep, base_min_score=base_thr
+        )
         if not selected:
-            print(f"[arxiv bot] {actual_email}: curated papers failed selection; not sending email.")
+            print(
+                f"[arxiv bot] {actual_email}: curated papers failed selection; not sending email."
+            )
             continue
 
         n = len(selected)
-        subject = f"{subject_prefix} {dt.date.today()} — {n} paper{'s' if n != 1 else ''}"
-        print(f"[arxiv bot] {actual_email}: selected {n} papers (effective threshold={eff_thr})")
-        text_body, html_body = make_email_body_for_recipient(actual_email, selected, track_base)
+        subject = (
+            f"{subject_prefix} {dt.date.today()} — {n} paper{'s' if n != 1 else ''}"
+        )
+        print(
+            f"[arxiv bot] {actual_email}: selected {n} papers (effective threshold={eff_thr})"
+        )
+        text_body, html_body = make_email_body_for_recipient(
+            actual_email, selected, track_base
+        )
         record_recommendation_snapshots(actual_email, selected)
         send_email(cfg, subject, text_body, html_body, to_override=[actual_email])
 
     print(f"[arxiv bot] processed {len(email_cfg['to_addrs'])} recipient(s).")
 
+
 if __name__ == "__main__":
     main()
-

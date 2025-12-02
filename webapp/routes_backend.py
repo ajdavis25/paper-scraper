@@ -11,6 +11,7 @@ from google.oauth2 import id_token
 from sqlalchemy import func
 
 from shared.db import db
+from shared.preferences import clamp_weight
 from shared.gmail_push import (
     fetch_access_token,
     get_message,
@@ -42,11 +43,24 @@ def api_preferences():
         data = request.get_json(force=True) or {}
         config = PreferenceConfig.get_or_create_for_user(current_user, commit=False)
 
+        def _sanitize_nonnegative(value, fallback=1.0):
+            try:
+                parsed = float(value)
+            except (TypeError, ValueError):
+                return fallback
+            return max(0.0, parsed)
+
         config.keywords = data.get("keywords") or []
         config.excluded_keywords = data.get("excluded_keywords") or []
         config.authors = data.get("authors") or []
         config.categories = data.get("categories") or ["astro-ph"]
-        config.min_score = data.get("min_score", 1.0) or 1.0
+        config.min_score = _sanitize_nonnegative(data.get("min_score", 1.0), 1.0)
+        for weight_field in PreferenceConfig.WEIGHT_DEFAULTS:
+            setattr(
+                config,
+                weight_field,
+                clamp_weight(data.get(weight_field), weight_field),
+            )
 
         db.session.commit()
         payload = config.as_dict()

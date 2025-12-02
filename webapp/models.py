@@ -3,6 +3,7 @@
 from datetime import datetime
 from flask_login import UserMixin
 from shared.db import db
+from shared.preferences import WEIGHT_DEFAULTS as PREF_WEIGHT_DEFAULTS
 
 # mixins
 class TimestampMixin:
@@ -90,6 +91,8 @@ class UserPreference(db.Model, TimestampMixin):
 class PreferenceConfig(db.Model):
     __tablename__ = "preference_config"
 
+    WEIGHT_DEFAULTS = PREF_WEIGHT_DEFAULTS.copy()
+
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(
         db.Integer,
@@ -102,6 +105,10 @@ class PreferenceConfig(db.Model):
     authors = db.Column(db.JSON, default=list)
     categories = db.Column(db.JSON, default=list)
     min_score = db.Column(db.Float, default=1.0)
+    keyword_weight = db.Column(db.Float, default=WEIGHT_DEFAULTS["keyword_weight"])
+    author_weight = db.Column(db.Float, default=WEIGHT_DEFAULTS["author_weight"])
+    exclude_penalty = db.Column(db.Float, default=WEIGHT_DEFAULTS["exclude_penalty"])
+    all_bonus = db.Column(db.Float, default=WEIGHT_DEFAULTS["all_bonus"])
 
     user = db.relationship(
         "User",
@@ -113,13 +120,17 @@ class PreferenceConfig(db.Model):
     )
 
     def as_dict(self):
-        return {
+        payload = {
             "keywords": list(self.keywords or []),
             "excluded_keywords": list(self.excluded_keywords or []),
             "authors": list(self.authors or []),
             "categories": list(self.categories or ["astro-ph"]),
             "min_score": self.min_score if self.min_score is not None else 1.0,
         }
+        for field, default in self.WEIGHT_DEFAULTS.items():
+            value = getattr(self, field, None)
+            payload[field] = value if value is not None else default
+        return payload
 
     @classmethod
     def get_or_create_for_user(cls, user, *, commit=True):
@@ -135,6 +146,7 @@ class PreferenceConfig(db.Model):
             return existing
 
         defaults = cls.query.filter_by(user_id=None).first()
+        weight_defaults = defaults.as_dict() if defaults else {}
         config = cls(
             user_id=user.id,
             keywords=list((defaults.keywords if defaults else []) or []),
@@ -142,6 +154,10 @@ class PreferenceConfig(db.Model):
             authors=list((defaults.authors if defaults else []) or []),
             categories=list((defaults.categories if defaults else []) or ["astro-ph"]),
             min_score=defaults.min_score if defaults and defaults.min_score is not None else 1.0,
+            keyword_weight=weight_defaults.get("keyword_weight", cls.WEIGHT_DEFAULTS["keyword_weight"]),
+            author_weight=weight_defaults.get("author_weight", cls.WEIGHT_DEFAULTS["author_weight"]),
+            exclude_penalty=weight_defaults.get("exclude_penalty", cls.WEIGHT_DEFAULTS["exclude_penalty"]),
+            all_bonus=weight_defaults.get("all_bonus", cls.WEIGHT_DEFAULTS["all_bonus"]),
         )
         db.session.add(config)
         if commit:
@@ -294,6 +310,18 @@ def ensure_preference_config_schema():
                 conn.execute(text("ALTER TABLE preference_config ADD COLUMN excluded_keywords JSON"))
             except Exception as exc:
                 print(f"[migrate] warning adding excluded_keywords column: {exc}")
+
+    # ensure scoring weight columns exist (keyword_weight, author_weight, etc.)
+    for field, default in PreferenceConfig.WEIGHT_DEFAULTS.items():
+        if field in existing_columns:
+            continue
+        column_type = "REAL"
+        alter_sql = f"ALTER TABLE preference_config ADD COLUMN {field} {column_type} DEFAULT {default}"
+        with engine.begin() as conn:
+            try:
+                conn.execute(text(alter_sql))
+            except Exception as exc:
+                print(f"[migrate] warning adding {field} column: {exc}")
 
     # ensure a default/global config row exists for cloning new users
     if not PreferenceConfig.query.filter_by(user_id=None).first():

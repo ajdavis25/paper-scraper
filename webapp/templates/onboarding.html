@@ -13,7 +13,7 @@ content %}
   </p>
 
   <div class="wizard-step" data-step="1">
-    <h3>step 1 &mdash; choose a domain</h3>
+    <h3>step 1 &mdash; choose a domain <span class="accent-text">*</span></h3>
     <div class="domain-grid">
       {% for domain in domain_groups %}
       <label class="domain-card">
@@ -32,7 +32,9 @@ content %}
   </div>
 
   <div class="wizard-step" data-step="2" hidden>
-    <h3>step 2 &mdash; pick some interests</h3>
+    <h3>
+      step 2 &mdash; pick some interests <span class="accent-text">*</span>
+    </h3>
     <p class="muted" id="interest-hint">
       select a domain above to narrow this list or keep everything visible.
     </p>
