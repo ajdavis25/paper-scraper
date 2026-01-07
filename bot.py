@@ -207,14 +207,37 @@ def load_config(path=None):
 
 
 def build_search_query(cfg):
-    cats = set(cfg["arxiv"].get("categories", []))
+    """
+    build the arXiv category portion of the search query.
+
+    - if a category is bare (no dot, no wildcard), append ".*" so we include all of
+      its subcategories (e.g., "astro-ph" -> "astro-ph.*", "physics" -> "physics.*").
+    - preserve explicit subcategory or wildcard inputs (e.g., "astro-ph.CO",
+      "astro-ph.*", "physics.acc-ph").
+    """
+
+    def _normalize_cat(cat: str) -> str:
+        if not cat:
+            return ""
+        c = cat.strip()
+        if c.startswith("cat:"):
+            c = c[4:]
+        # add wildcard for bare parents
+        if "*" not in c and "." not in c:
+            c = c + ".*"
+        return c
+
+    raw_cats = cfg["arxiv"].get("categories", [])
+    cats = [_normalize_cat(c) for c in raw_cats if c]
+    cats = [c for c in _dedupe_preserve_order(cats) if c]
+
     # properly join categories
     if not cats:
-        return "cat:astro-ph"
+        return "cat:astro-ph.*"
     if len(cats) > 1:
         cat_query = " OR ".join([f"cat:{c}" for c in cats])
     else:
-        cat_query = f"cat:{list(cats)[0]}"
+        cat_query = f"cat:{cats[0]}"
     return cat_query
 
 

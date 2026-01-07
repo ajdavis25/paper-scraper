@@ -122,7 +122,23 @@ def _get_weight(prefs, key):
 
 
 def match_category(cat, allowed):
-    return any(cat == a or cat.startswith(a + ".") for a in allowed)
+    """
+    match a paper category against allowed categories.
+    supports wildcards like "astro-ph.*" or bare parents ("astro-ph") so that
+    subcategories are accepted.
+    """
+    for a in allowed or []:
+        if not a:
+            continue
+        target = a.strip()
+        if target.endswith(".*"):
+            prefix = target[:-2]
+            if cat == prefix or cat.startswith(prefix + "."):
+                return True
+        else:
+            if cat == target or cat.startswith(target + "."):
+                return True
+    return False
 
 
 def score_paper(title, abstract, authors, prefs):
