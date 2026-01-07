@@ -168,7 +168,7 @@ def score_paper(title, abstract, authors, prefs):
     def _contains_term(src: str, term: str) -> bool:
         """
         check for whole-term matches (word boundaries) to avoid substring hits
-        like 'agn' matching 'magnetic'. Handles multiword phrases.
+        like 'agn' matching 'magnetic'. handles multiword phrases.
         """
         if not src or not term:
             return False
