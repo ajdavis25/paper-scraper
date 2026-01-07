@@ -146,7 +146,7 @@ def score_paper(title, abstract, authors, prefs):
     compute a numeric relevance score for a paper.
     - case/diacritic insensitive
     - handles multiword phrases
-    - ignores punctuation boundaries
+    - enforces word boundaries so substrings don't create false positives
     """
     text = _normalize(f"{title or ''} {abstract or ''}")
     authors_norm = []
@@ -165,13 +165,25 @@ def score_paper(title, abstract, authors, prefs):
     exclude_penalty = _get_weight(prefs, "exclude_penalty")
     all_bonus = _get_weight(prefs, "all_bonus")
 
+    def _contains_term(src: str, term: str) -> bool:
+        """
+        check for whole-term matches (word boundaries) to avoid substring hits
+        like 'agn' matching 'magnetic'. Handles multiword phrases.
+        """
+        if not src or not term:
+            return False
+        pattern = rf"(?<![0-9a-z]){re.escape(term)}(?![0-9a-z])"
+        return re.search(pattern, src) is not None
+
     score = 0.0
     details = {}
-    matched_any = [orig for orig, norm in any_kw if norm and norm in text]
+    matched_any = [orig for orig, norm in any_kw if norm and _contains_term(text, norm)]
     any_hits = len(matched_any)
-    missing_all = [orig for orig, norm in all_kw if norm and norm not in text]
+    missing_all = [orig for orig, norm in all_kw if norm and not _contains_term(text, norm)]
     all_ok = bool(all_kw) and not missing_all
-    matched_excluded = [orig for orig, norm in ex_kw if norm and norm in text]
+    matched_excluded = [
+        orig for orig, norm in ex_kw if norm and _contains_term(text, norm)
+    ]
     ex_hits = len(matched_excluded)
 
     score += any_hits * keyword_weight
