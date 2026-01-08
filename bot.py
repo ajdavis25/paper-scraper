@@ -254,6 +254,12 @@ def _download_arxiv_feed(url, headers, timeout):
     try:
         resp = requests.get(url, headers=headers, timeout=timeout)
         resp.raise_for_status()
+    except requests.exceptions.HTTPError as e:
+        # arXiv returns 429 when we page too quickly; surface a recognizable message
+        if e.response is not None and e.response.status_code == 429:
+            raise RuntimeError("Rate exceeded (status 429)") from e
+        print(f"error: could not fetch from arXiv: {e}")
+        raise
     except Exception as e:
         print(f"error: could not fetch from arXiv: {e}")
         raise
