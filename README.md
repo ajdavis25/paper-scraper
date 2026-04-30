@@ -1,14 +1,14 @@
 <p align="center">
-  <img src="https://github.com/ajdavis25/paper-scraper/blob/main/assets/banner.png" 
+  <img src="https://raw.githubusercontent.com/ajdavis25/paper-scraper/main/assets/banner.png" 
        alt="arxiv digest bot — built out of spite 💥" 
        width="100%">
 </p>
 
 <p align="center">
   <a href="https://github.com/ajdavis25/paper-scraper/actions/workflows/daily_digest.yml">
-    <img src="https://github.com/ajdavis25/paper-scraper/actions/workflows/daily_digest.yml/badge.svg" alt="Build">
+    <img src="https://github.com/ajdavis25/paper-scraper/actions/workflows/daily_digest.yml/badge.svg?branch=main" alt="Daily Digest">
   </a>
-  <img src="https://img.shields.io/github/license/ajdavis25/paper-scraper" alt="License">
+  <img src="https://img.shields.io/github/license/ajdavis25/paper-scraper?cacheSeconds=300" alt="License">
   <img src="https://img.shields.io/github/stars/ajdavis25/paper-scraper?style=social" alt="Stars">
 </p>
 
