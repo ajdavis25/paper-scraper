@@ -309,7 +309,7 @@ pytest -q
 
 ### LICENSE
 
-**MIT License © 2025 Ashton Davis**
+**[MIT License](LICENSE) © 2025 Ashton Davis**
 
 ---
 
