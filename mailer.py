@@ -1,4 +1,5 @@
 import os, smtplib
+from datetime import datetime, timedelta
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from dotenv import load_dotenv
@@ -7,6 +8,12 @@ from dotenv import load_dotenv
 load_dotenv()
 
 _FLASK_APP = None
+
+# contexts that are periodic broadcasts: safe to suppress a repeat send to the
+# same recipient inside the window. transactional mail (subscribe acks etc.)
+# must never be deduped.
+_DEDUPE_CONTEXTS = {"digest"}
+_DEDUPE_WINDOW_HOURS = 20
 
 
 def _get_flask_app():
@@ -53,6 +60,41 @@ def _log_delivery_event(recipient, subject, status, context="digest", error=None
             )
         except Exception as exc:
             print(f"[mailer] failed to log delivery event: {exc}")
+
+
+def _recently_sent(recipient, context, window_hours=_DEDUPE_WINDOW_HOURS):
+    """
+    true only when the DB confirms this recipient already received a `context`
+    email within the window. every failure path returns False so a DB hiccup
+    can only ever allow a duplicate, never block a digest.
+    """
+    app = _get_flask_app()
+    if not app:
+        return False
+    try:
+        from webapp.models import DeliveryEvent
+    except Exception as exc:
+        print(f"[mailer] cannot import DeliveryEvent for dedupe check: {exc}")
+        return False
+
+    clean_recipient = (recipient or "").strip().lower()
+    if not clean_recipient:
+        return False
+    cutoff = datetime.utcnow() - timedelta(hours=window_hours)
+    try:
+        with app.app_context():
+            return (
+                DeliveryEvent.query.filter(
+                    DeliveryEvent.recipient == clean_recipient,
+                    DeliveryEvent.context == context,
+                    DeliveryEvent.status == "sent",
+                    DeliveryEvent.created_at >= cutoff,
+                ).first()
+                is not None
+            )
+    except Exception as exc:
+        print(f"[mailer] dedupe lookup failed (sending anyway): {exc}")
+        return False
 
 
 def send_email(cfg, subject, text_body, html_body, to_override=None, context="digest"):
@@ -118,7 +160,24 @@ def send_email(cfg, subject, text_body, html_body, to_override=None, context="di
                     _log_delivery_event(addr, subject, "failed", context, error=str(e))
                 return
 
+            force_resend = os.getenv("FORCE_RESEND", "").strip().lower() in (
+                "1",
+                "true",
+                "yes",
+            )
             for addr in recipients:
+                if (
+                    context in _DEDUPE_CONTEXTS
+                    and not force_resend
+                    and _recently_sent(addr, context)
+                ):
+                    print(
+                        f"[mailer] skipping {addr}: '{context}' email already sent "
+                        f"within {_DEDUPE_WINDOW_HOURS}h (set FORCE_RESEND=1 to override)"
+                    )
+                    _log_delivery_event(addr, subject, "skipped-duplicate", context)
+                    continue
+
                 msg = MIMEMultipart("alternative")
                 msg["subject"] = subject
                 msg["from"] = em["from_addr"]
